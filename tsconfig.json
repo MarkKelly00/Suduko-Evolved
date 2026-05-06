@@ -4,17 +4,26 @@
     "strict": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": [
+        "src/*"
+      ]
     },
     "noUncheckedIndexedAccess": false,
     "skipLibCheck": true,
-    "types": ["jest", "node"]
+    "types": [
+      "jest",
+      "node"
+    ]
   },
   "include": [
     "**/*.ts",
-    "**/*.tsx",
-    ".expo/types/**/*.ts",
-    "expo-env.d.ts"
+    "**/*.tsx"
   ],
-  "exclude": ["node_modules", "ios", "android", "babel.config.js", "metro.config.js"]
+  "exclude": [
+    "node_modules",
+    "ios",
+    "android",
+    "babel.config.js",
+    "metro.config.js"
+  ]
 }

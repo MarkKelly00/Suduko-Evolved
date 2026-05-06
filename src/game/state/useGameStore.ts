@@ -17,7 +17,16 @@ interface SelectedCell {
   col: number;
 }
 
+export type GameMode = 'campaign' | 'sprint';
+
 export interface ActiveGame {
+  /** Drives scoring/timing semantics. `campaign` counts up; `sprint`
+   *  counts up too but enforces `timeLimitMs` and times out gracefully. */
+  mode: GameMode;
+  /** Sprint-only — the leaderboard / mode bucket id. */
+  modeId: string | null;
+  /** Sprint-only — total allowed playtime in ms. `null` for campaign. */
+  timeLimitMs: number | null;
   level: Level;
   puzzle: Puzzle;
   /** Working grid (player edits this). */
@@ -27,10 +36,16 @@ export interface ActiveGame {
   selected: SelectedCell | null;
   mistakes: number;
   hintsUsed: number;
-  /** ms since `startedAt` (refreshed on each tick). */
+  /** ms since `startedAt`, minus all `pausedTotalMs`. Refreshed on each tick. */
   elapsedMs: number;
+  /** Wall-clock ms when the session began. */
   startedAt: number;
-  status: 'playing' | 'paused' | 'won';
+  /** Cumulative ms the session has been paused (excluded from `elapsedMs`). */
+  pausedTotalMs: number;
+  /** When in the `paused` state, the wall-clock ms at which we paused. */
+  pausedAt: number | null;
+  /** `won` = puzzle solved; `timedOut` = sprint clock expired before solve. */
+  status: 'playing' | 'paused' | 'won' | 'timedOut';
   /** Consecutive correct placements without a mistake. */
   streak: number;
   /** Max streak observed during this session. */
@@ -52,8 +67,15 @@ interface UndoFrame {
   tallies: CompletionTallies;
 }
 
+interface SprintInput {
+  modeId: string;
+  level: Level;
+  durationSeconds: number;
+}
+
 interface GameActions {
   startSession: (level: Level) => void;
+  startSprintSession: (input: SprintInput) => void;
   endSession: () => void;
   pauseSession: () => void;
   resumeSession: () => void;
@@ -153,6 +175,9 @@ export const useGameStore = create<GameState>((set, get) => ({
   startSession: (level) => {
     const puzzle = generatePuzzle(level.seed, level.difficulty);
     const initial: ActiveGame = {
+      mode: 'campaign',
+      modeId: null,
+      timeLimitMs: null,
       level,
       puzzle,
       grid: cloneGrid(puzzle.given),
@@ -162,6 +187,36 @@ export const useGameStore = create<GameState>((set, get) => ({
       hintsUsed: 0,
       elapsedMs: 0,
       startedAt: Date.now(),
+      pausedTotalMs: 0,
+      pausedAt: null,
+      status: 'playing',
+      streak: 0,
+      bestStreak: 0,
+      conflicts: [],
+      tallies: emptyTallies(),
+      lastEvents: [],
+      undoStack: [],
+    };
+    set({ active: initial, noteMode: false });
+    startTimerInterval();
+  },
+  startSprintSession: ({ modeId, level, durationSeconds }) => {
+    const puzzle = generatePuzzle(level.seed, level.difficulty);
+    const initial: ActiveGame = {
+      mode: 'sprint',
+      modeId,
+      timeLimitMs: durationSeconds * 1000,
+      level,
+      puzzle,
+      grid: cloneGrid(puzzle.given),
+      notes: emptyNotes(),
+      selected: null,
+      mistakes: 0,
+      hintsUsed: 0,
+      elapsedMs: 0,
+      startedAt: Date.now(),
+      pausedTotalMs: 0,
+      pausedAt: null,
       status: 'playing',
       streak: 0,
       bestStreak: 0,
@@ -182,12 +237,30 @@ export const useGameStore = create<GameState>((set, get) => ({
     const a = get().active;
     if (!a || a.status !== 'playing') return;
     stopTimerInterval();
-    set({ active: { ...a, status: 'paused' } });
+    set({
+      active: {
+        ...a,
+        status: 'paused',
+        pausedAt: Date.now(),
+      },
+    });
   },
   resumeSession: () => {
     const a = get().active;
     if (!a || a.status !== 'paused') return;
-    set({ active: { ...a, status: 'playing' } });
+    // Fold the pause window into `pausedTotalMs` so the displayed timer
+    // doesn't jump on resume. Wall-clock-correct without trusting JS timers
+    // across iOS background suspension.
+    const now = Date.now();
+    const delta = a.pausedAt != null ? Math.max(0, now - a.pausedAt) : 0;
+    set({
+      active: {
+        ...a,
+        status: 'playing',
+        pausedAt: null,
+        pausedTotalMs: a.pausedTotalMs + delta,
+      },
+    });
     startTimerInterval();
   },
   abandonSession: () => {
@@ -197,7 +270,19 @@ export const useGameStore = create<GameState>((set, get) => ({
   selectCell: (row, col) => {
     const a = get().active;
     if (!a) return;
-    set({ active: { ...a, selected: { row, col } } });
+    // Selecting a different cell always clears stale conflict highlights.
+    // The persistent "this placement is wrong vs the solution" indication
+    // is computed from grid/solution at render time (`selectCellMistake`),
+    // so the player still sees their mistakes — only the transient
+    // row/col/box conflict ring fades when they move on.
+    const isSame = a.selected && a.selected.row === row && a.selected.col === col;
+    set({
+      active: {
+        ...a,
+        selected: { row, col },
+        conflicts: isSame ? a.conflicts : [],
+      },
+    });
   },
   toggleNoteMode: () => {
     set({ noteMode: !get().noteMode });
@@ -245,7 +330,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       streak = 0;
     }
 
-    const events = detectCompletionEvents(a.grid, next);
+    const events = detectCompletionEvents(a.grid, next, a.puzzle.solution);
     const tallies = bumpTallies(a.tallies, events);
     const status: ActiveGame['status'] = events.some((e) => e.type === 'puzzle')
       ? 'won'
@@ -305,7 +390,17 @@ export const useGameStore = create<GameState>((set, get) => ({
   tickTimer: () => {
     const a = get().active;
     if (!a || a.status !== 'playing') return;
-    set({ active: { ...a, elapsedMs: Date.now() - a.startedAt } });
+    const next = Math.max(0, Date.now() - a.startedAt - a.pausedTotalMs);
+    // Sprint mode: clock-based forced end. The session goes into `timedOut`
+    // and the timer interval shuts off so we don't keep ticking.
+    if (a.timeLimitMs != null && next >= a.timeLimitMs) {
+      stopTimerInterval();
+      set({
+        active: { ...a, elapsedMs: a.timeLimitMs, status: 'timedOut' },
+      });
+      return;
+    }
+    set({ active: { ...a, elapsedMs: next } });
   },
   clearLastEvents: () => {
     const a = get().active;
@@ -322,6 +417,17 @@ export const selectActive = (s: GameState) => s.active;
 export const selectSelected = (s: GameState) => s.active?.selected ?? null;
 export const selectNoteMode = (s: GameState) => s.noteMode;
 export const selectLastEvents = (s: GameState) => s.active?.lastEvents ?? [];
+
+/**
+ * Sprint-only: ms remaining before the session times out. `null` for
+ * campaign mode (no clock-based end). Saturates at 0 once expired so UIs
+ * can format `00:00` instead of negative numbers.
+ */
+export const selectTimeRemainingMs = (s: GameState): number | null => {
+  const a = s.active;
+  if (!a || a.timeLimitMs == null) return null;
+  return Math.max(0, a.timeLimitMs - a.elapsedMs);
+};
 
 export function selectCellValue(row: number, col: number) {
   return (s: GameState): number | null => s.active?.grid[row]?.[col] ?? null;
@@ -340,5 +446,22 @@ export function selectCellConflict(row: number, col: number) {
     const conflicts = s.active?.conflicts;
     if (!conflicts) return false;
     return conflicts.some((p) => p.row === row && p.col === col);
+  };
+}
+
+/**
+ * True iff the cell currently holds a non-given value that does not match
+ * the puzzle's unique solution. Persistent across selection changes — this
+ * is what the player should see as "still wrong" until they erase or
+ * correct it. Givens are never mistakes.
+ */
+export function selectCellMistake(row: number, col: number) {
+  return (s: GameState): boolean => {
+    const a = s.active;
+    if (!a) return false;
+    if (a.puzzle.given[row]?.[col] != null) return false; // givens can't be wrong
+    const v = a.grid[row]?.[col];
+    if (v == null) return false;
+    return v !== a.puzzle.solution[row]?.[col];
   };
 }

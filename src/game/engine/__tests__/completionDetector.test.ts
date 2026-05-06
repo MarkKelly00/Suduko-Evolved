@@ -8,49 +8,41 @@ function emptyGrid(): Grid {
 
 describe('detectCompletionEvents', () => {
   test('returns no events when no cells changed', () => {
-    const events = detectCompletionEvents(SEED_GRID_A, SEED_GRID_A);
+    const events = detectCompletionEvents(SEED_GRID_A, SEED_GRID_A, SEED_GRID_A);
     expect(events).toEqual([]);
   });
 
-  test('emits a row event when a row is completed by a single placement', () => {
+  test('emits a row event when a row is completed correctly by a single placement', () => {
     const before = cloneGrid(SEED_GRID_A);
     before[0]![0] = null;
     const after = cloneGrid(SEED_GRID_A);
-    const events = detectCompletionEvents(before, after);
+    const events = detectCompletionEvents(before, after, SEED_GRID_A);
     expect(events.find((e) => e.type === 'row' && e.index === 0)).toBeTruthy();
-    // Row 0 had 8/9 cells before; placing the last completes the row.
-    // It also completes Box 0 because (0,0) is in box 0 and the box was
-    // missing the same cell.
     expect(events.find((e) => e.type === 'box' && e.index === 0)).toBeTruthy();
-    // Column 0 also gets completed.
     expect(events.find((e) => e.type === 'col' && e.index === 0)).toBeTruthy();
   });
 
-  test('emits a numberSet event when the last instance of a digit is placed', () => {
-    // Construct: a grid where digit 5 appears 8 times, and one specific cell
-    // expects 5 in the solution. After placing, count(5) becomes 9.
+  test('emits a numberSet event when the last instance of a digit is placed correctly', () => {
     const before = cloneGrid(SEED_GRID_A);
-    before[0]![0] = null; // SEED_GRID_A[0][0] = 5
+    before[0]![0] = null;
     const after = cloneGrid(SEED_GRID_A);
-    const events = detectCompletionEvents(before, after);
-    expect(events.find((e) => e.type === 'numberSet' && e.value === 5)).toBeTruthy();
+    const events = detectCompletionEvents(before, after, SEED_GRID_A);
+    expect(events.find((e) => e.type === 'numberSet' && e.value === SEED_GRID_A[0]![0])).toBeTruthy();
   });
 
-  test('emits puzzle event when the final cell is placed', () => {
+  test('emits puzzle event when the final cell is placed correctly', () => {
     const before = cloneGrid(SEED_GRID_A);
     before[8]![8] = null;
     const after = cloneGrid(SEED_GRID_A);
-    const events = detectCompletionEvents(before, after);
+    const events = detectCompletionEvents(before, after, SEED_GRID_A);
     expect(events.find((e) => e.type === 'puzzle')).toBeTruthy();
   });
 
   test('emits multiple events when one move completes row + col + box at once', () => {
-    // The (0,0) corner placement completes row 0, col 0, box 0, and
-    // potentially numberSet for value 5.
     const before = cloneGrid(SEED_GRID_A);
     before[0]![0] = null;
     const after = cloneGrid(SEED_GRID_A);
-    const events = detectCompletionEvents(before, after);
+    const events = detectCompletionEvents(before, after, SEED_GRID_A);
     const types = new Set(events.map((e) => e.type));
     expect(types.has('row')).toBe(true);
     expect(types.has('col')).toBe(true);
@@ -61,7 +53,7 @@ describe('detectCompletionEvents', () => {
     const before = emptyGrid();
     const after = emptyGrid();
     after[4]![4] = 5;
-    const events = detectCompletionEvents(before, after);
+    const events = detectCompletionEvents(before, after, SEED_GRID_A);
     expect(events).toEqual([]);
   });
 
@@ -71,8 +63,74 @@ describe('detectCompletionEvents', () => {
     const after = cloneGrid(SEED_GRID_A);
     const beforeCopy = cloneGrid(before);
     const afterCopy = cloneGrid(after);
-    detectCompletionEvents(before, after);
+    detectCompletionEvents(before, after, SEED_GRID_A);
     expect(before).toEqual(beforeCopy);
     expect(after).toEqual(afterCopy);
+  });
+
+  // ----- Solution-aware behavior --------------------------------------------
+
+  test('does NOT emit a row event when the row is filled with the wrong values', () => {
+    // Take row 0 of SEED_GRID_A and reverse it. The reversed row still
+    // contains 1..9 exactly once (so it would pass a "uniqueness" check) but
+    // it disagrees with the solution at most cells. Premium VFX must not
+    // celebrate this.
+    const reversedRow = SEED_GRID_A[0]!.slice().reverse() as number[];
+    const before = cloneGrid(SEED_GRID_A);
+    for (let c = 0; c < 9; c++) before[0]![c] = null;
+    const after = cloneGrid(SEED_GRID_A);
+    for (let c = 0; c < 9; c++) after[0]![c] = reversedRow[c]!;
+    const events = detectCompletionEvents(before, after, SEED_GRID_A);
+    expect(events.find((e) => e.type === 'row' && e.index === 0)).toBeFalsy();
+  });
+
+  test('does NOT emit a puzzle event when the board is full but values are wrong', () => {
+    // Swap two cells in row 0 — the board is full, but two cells disagree
+    // with the unique solution. No win.
+    const before = cloneGrid(SEED_GRID_A);
+    before[0]![0] = null;
+    before[0]![1] = null;
+    const after = cloneGrid(SEED_GRID_A);
+    after[0]![0] = SEED_GRID_A[0]![1]!;
+    after[0]![1] = SEED_GRID_A[0]![0]!;
+    const events = detectCompletionEvents(before, after, SEED_GRID_A);
+    expect(events.find((e) => e.type === 'puzzle')).toBeFalsy();
+  });
+
+  test('does NOT emit a numberSet event when the digit count hits 9 with a wrong placement', () => {
+    // Build a grid where digit 5 appears 8 times correctly. Then place a
+    // 5 in an empty cell that the solution says should be a 6. Count of 5
+    // becomes 9, but one 5 is in the wrong place.
+    const target = 5;
+    const wrongCell: { r: number; c: number } | null = (() => {
+      for (let r = 0; r < 9; r++) {
+        for (let c = 0; c < 9; c++) {
+          if (SEED_GRID_A[r]![c] !== target) return { r, c };
+        }
+      }
+      return null;
+    })();
+    expect(wrongCell).not.toBeNull();
+    const { r, c } = wrongCell!;
+
+    const before = cloneGrid(SEED_GRID_A);
+    // Remove the solution's actual `target` instance — we're going to
+    // reinsert `target` at the wrong cell instead.
+    let removed = false;
+    for (let rr = 0; rr < 9 && !removed; rr++) {
+      for (let cc = 0; cc < 9 && !removed; cc++) {
+        if (SEED_GRID_A[rr]![cc] === target) {
+          before[rr]![cc] = null;
+          removed = true;
+        }
+      }
+    }
+    before[r]![c] = null;
+
+    const after = cloneGrid(before);
+    after[r]![c] = target; // wrong placement — solution[r][c] !== target
+
+    const events = detectCompletionEvents(before, after, SEED_GRID_A);
+    expect(events.find((e) => e.type === 'numberSet' && e.value === target)).toBeFalsy();
   });
 });

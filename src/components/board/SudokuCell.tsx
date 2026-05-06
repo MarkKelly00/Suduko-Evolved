@@ -1,9 +1,17 @@
-import React, { useCallback } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useRef } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 import { useShallow } from 'zustand/react/shallow';
 import {
   selectCellConflict,
   selectCellGiven,
+  selectCellMistake,
   selectCellNotes,
   selectCellValue,
   useGameStore,
@@ -31,6 +39,44 @@ export const SudokuCell = React.memo(function SudokuCell({ row, col, size }: Pro
   const notes = useGameStore(selectCellNotes(row, col));
   const isGiven = useGameStore(selectCellGiven(row, col));
   const conflict = useGameStore(selectCellConflict(row, col));
+  const mistake = useGameStore(selectCellMistake(row, col));
+
+  // Per-cell placement / mistake micro-feedback. Drives a tiny scale pop
+  // for a correct placement, and a brief shake for a mistake. Lives on
+  // the UI thread via Reanimated shared values.
+  const reducedMotion = useSettingsStore((s) => s.reducedMotion);
+  const scale = useSharedValue(1);
+  const shakeX = useSharedValue(0);
+  const prevValueRef = useRef<number | null>(value);
+  const prevMistakeRef = useRef<boolean>(mistake);
+  useEffect(() => {
+    const prev = prevValueRef.current;
+    if (value != null && value !== prev && !isGiven) {
+      // A new value just landed in this cell.
+      if (mistake) {
+        if (!reducedMotion) {
+          shakeX.value = withSequence(
+            withTiming(-3, { duration: 40, easing: Easing.out(Easing.quad) }),
+            withTiming(3, { duration: 60, easing: Easing.linear }),
+            withTiming(-2, { duration: 50, easing: Easing.linear }),
+            withTiming(0, { duration: 40, easing: Easing.in(Easing.quad) }),
+          );
+        }
+      } else {
+        if (!reducedMotion) {
+          scale.value = withSequence(
+            withTiming(1.18, { duration: 100, easing: Easing.out(Easing.quad) }),
+            withTiming(1, { duration: 160, easing: Easing.bezier(0.16, 1, 0.3, 1) }),
+          );
+        }
+      }
+    }
+    prevValueRef.current = value;
+    prevMistakeRef.current = mistake;
+  }, [value, mistake, isGiven, reducedMotion, scale, shakeX]);
+  const animatedTextStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }, { translateX: shakeX.value }],
+  }));
 
   // Bundle the selection-related flags into one shallow-compared selector to
   // avoid four separate subscriptions per cell.
@@ -48,14 +94,19 @@ export const SudokuCell = React.memo(function SudokuCell({ row, col, size }: Pro
     select(row, col);
   }, [select, row, col]);
 
-  const bgColor = backgroundFor(highlights, conflict, colorblindMode);
+  const bgColor = backgroundFor(highlights, conflict, mistake, colorblindMode);
   const borderRight = (col + 1) % 3 === 0 && col !== 8;
   const borderBottom = (row + 1) % 3 === 0 && row !== 8;
+  // Text color hierarchy: givens are immutable & always neutral; cells that
+  // currently hold a wrong value (mistake) read red; everything else is the
+  // warm gold "this is your placement" tone. Conflicts (transient peer
+  // highlight from the most recent placement) are shown via background only,
+  // so they don't change the text of unrelated correct cells.
   const numberColor = isGiven
     ? highContrast
       ? colors.text
       : colors.cellGiven
-    : conflict
+    : mistake
       ? colors.mistake
       : colors.cellUserValue;
 
@@ -78,9 +129,15 @@ export const SudokuCell = React.memo(function SudokuCell({ row, col, size }: Pro
       ]}
     >
       {value != null ? (
-        <Text style={[styles.value, { color: numberColor, fontSize: size * 0.5 }]}>
+        <Animated.Text
+          style={[
+            styles.value,
+            { color: numberColor, fontSize: size * 0.5 },
+            animatedTextStyle,
+          ]}
+        >
           {value}
-        </Text>
+        </Animated.Text>
       ) : notes.length > 0 ? (
         <CandidateNotes notes={notes} cellSize={size} />
       ) : (
@@ -135,9 +192,23 @@ function deriveHighlights(s: GameState, row: number, col: number): Highlights {
   };
 }
 
-function backgroundFor(h: Highlights, conflict: boolean, _colorblind: boolean): string {
-  if (conflict) return colors.cellConflict;
+function backgroundFor(
+  h: Highlights,
+  conflict: boolean,
+  mistake: boolean,
+  _colorblind: boolean,
+): string {
+  // Priority (top wins):
+  //  1. selected — gold-tinted, strongest cue.
+  //  2. transient conflict — red-tinted, fades when the player moves on
+  //     because `selectCell` clears the conflicts list.
+  //  3. persistent mistake — softer red so the player can still scan the
+  //     board, but it's clearly wrong.
+  //  4. same-number peek — teal-tinted, encourages logical scanning.
+  //  5. row/col/box of selected — subtle gold wash.
   if (h.isSelected) return colors.cellSelected;
+  if (conflict) return colors.cellConflict;
+  if (mistake) return colors.cellMistakeBg;
   if (h.isSameNumber) return colors.cellSameNumber;
   if (h.inSameRow || h.inSameCol || h.inSameBox) return colors.cellHighlighted;
   return 'transparent';

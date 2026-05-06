@@ -5,6 +5,7 @@ import MapScreen from '@/screens/MapScreen';
 import GameScreen from '@/screens/GameScreen';
 import ResultsScreen from '@/screens/ResultsScreen';
 import TimeTrialScreen from '@/screens/TimeTrialScreen';
+import TimeTrialGameScreen from '@/screens/TimeTrialGameScreen';
 import ProfileScreen from '@/screens/ProfileScreen';
 import SettingsScreen from '@/screens/SettingsScreen';
 import type { RootStackParamList } from './routes';
@@ -35,6 +36,11 @@ export function RootNavigator() {
         options={{ animation: 'slide_from_bottom', presentation: 'modal' }}
       />
       <Stack.Screen name="TimeTrial" component={TimeTrialScreen} />
+      <Stack.Screen
+        name="TimeTrialGame"
+        component={TimeTrialGameScreen}
+        options={{ animation: 'slide_from_right' }}
+      />
       <Stack.Screen name="Profile" component={ProfileScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
     </Stack.Navigator>

@@ -3,18 +3,29 @@
  * from Jest tests. Lazy-requires `react-native-mmkv` inside the constructor
  * so simply having this file in the import graph doesn't crash a Node test
  * runner.
+ *
+ * react-native-mmkv 4.x (Nitro Modules) replaced the `new MMKV(cfg)` class
+ * constructor with a `createMMKV(cfg)` factory that returns a hybrid object.
+ * The instance methods also changed: `delete` -> `remove`, plus richer typed
+ * getters (`getString`, `getNumber`, `getBoolean`, `getBuffer`). We only use
+ * the string-typed get/set path because everything we persist is JSON.
  */
 
 import type { Storage } from './storage';
 
+/** Subset of `react-native-mmkv` 4.x's HybridObject we actually use. */
 interface MMKVLike {
   set: (key: string, value: string) => void;
   getString: (key: string) => string | undefined;
-  delete: (key: string) => void;
+  remove: (key: string) => boolean;
   clearAll: () => void;
-  addOnValueChangedListener?: (
+  addOnValueChangedListener: (
     cb: (changedKey: string) => void,
   ) => { remove: () => void };
+}
+
+interface MMKVModule {
+  createMMKV: (cfg: { id: string }) => MMKVLike;
 }
 
 export class MMKVStorage implements Storage {
@@ -27,8 +38,14 @@ export class MMKVStorage implements Storage {
     // ever instantiate `InMemoryStorage`, don't accidentally pull the native
     // module into the require graph.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const mmkvModule = require('react-native-mmkv') as { MMKV: new (cfg: { id: string }) => MMKVLike };
-    this.mmkv = new mmkvModule.MMKV({ id });
+    const mod = require('react-native-mmkv') as Partial<MMKVModule>;
+    if (typeof mod.createMMKV !== 'function') {
+      throw new Error(
+        "react-native-mmkv: `createMMKV` factory not found. Expected v4.x; " +
+          'reinstall with `npx expo install react-native-mmkv` and run prebuild.',
+      );
+    }
+    this.mmkv = mod.createMMKV({ id });
     if (typeof this.mmkv.addOnValueChangedListener === 'function') {
       this.nativeListenerHandle = this.mmkv.addOnValueChangedListener((changedKey) => {
         this.notify(changedKey);
@@ -55,7 +72,7 @@ export class MMKVStorage implements Storage {
   }
 
   remove(key: string): void {
-    this.mmkv.delete(key);
+    this.mmkv.remove(key);
     if (!this.nativeListenerHandle) this.notify(key);
   }
 

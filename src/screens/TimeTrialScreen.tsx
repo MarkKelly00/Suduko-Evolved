@@ -1,5 +1,6 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { ScreenBackground } from '@/components/ui/ScreenBackground';
 import { TopBar } from '@/components/ui/TopBar';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -8,10 +9,17 @@ import { TIME_TRIAL_MODES } from '@/game/modes/timeTrial';
 import { dailyPuzzle } from '@/game/modes/dailyPuzzle';
 import { useProgressStore } from '@/game/state/useProgressStore';
 import { colors, fontSize, fontWeight, letterSpacing, spacing } from '@/theme';
+import { formatDuration } from '@/utils/formatTime';
+import type { RootStackNavigation } from '@/app/navigation/routes';
 
 function TimeTrialScreen() {
+  const navigation = useNavigation<RootStackNavigation>();
   const bests = useProgressStore((s) => s.timeTrialBests);
   const todaySeed = dailyPuzzle.seedForToday();
+
+  const handleStart = (modeId: string) => {
+    navigation.navigate('TimeTrialGame', { modeId });
+  };
 
   return (
     <ScreenBackground>
@@ -35,16 +43,19 @@ function TimeTrialScreen() {
                   : 'Random seed each run.'}
               </Text>
               <View style={styles.statsRow}>
-                <Stat label="Best Score" value={best?.score ?? '—'} />
-                <Stat label="Best Time" value={best ? `${best.time}s` : '—'} />
+                <Stat
+                  label="Best Score"
+                  value={best ? best.score.toLocaleString() : '—'}
+                />
+                <Stat
+                  label="Best Time"
+                  value={best?.time ? formatDuration(best.time) : '—'}
+                />
               </View>
               <PremiumButton
-                label="Coming in Phase 6"
-                onPress={() => {
-                  /* TODO: Phase 6 wires the actual sprint loop. */
-                }}
-                variant="ghost"
-                disabled
+                label={best ? 'Race again' : 'Start sprint'}
+                onPress={() => handleStart(mode.id)}
+                variant="primary"
                 compact
                 style={styles.cta}
               />
@@ -56,7 +67,7 @@ function TimeTrialScreen() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string | number }) {
+function Stat({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.stat}>
       <Text style={styles.statValue}>{value}</Text>

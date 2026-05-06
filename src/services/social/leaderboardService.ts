@@ -1,8 +1,12 @@
 /**
- * Leaderboard service stub. Future-ready for server-validated scores —
- * `submitLocalScore` carries the puzzle seed + level + move count so the
- * backend can re-simulate to detect cheating once it exists.
+ * Leaderboard service. Captures every sprint / level run with enough
+ * metadata for future server-side validation (puzzle seed + level + move
+ * count → fully re-simulatable), and forwards the score to Game Center if
+ * the player is authenticated. Mock friend scores keep the UI populated
+ * until a real backend lands.
  */
+
+import { gameCenterService } from './gameCenterService';
 
 export interface LeaderboardEntry {
   playerId: string;
@@ -34,10 +38,26 @@ const MOCK_FRIENDS: LeaderboardEntry[] = [
   { playerId: 'mock-3', playerName: 'Maya', score: 3500, time: 247, date: Date.now(), rank: 3, isFriend: true },
 ];
 
+/** In-memory ledger of the most recent N submissions. Survives the session
+ *  but not app restarts (use MMKV later if we want true offline history).
+ *  Visible so the UI can show "your last runs" without a network. */
+const RECENT_LIMIT = 20;
+const recent: LeaderboardSubmission[] = [];
+
 export const leaderboardService = {
-  async submitLocalScore(_submission: LeaderboardSubmission): Promise<void> {
-    // No-op until backend exists. We could mirror to MMKV in Phase 6 for
-    // an offline ledger.
+  /** Record a local score and best-effort forward it to Game Center. The
+   *  forward only happens if `gameCenterService.isAuthenticated()` is
+   *  true — the player has to actively connect their account first. */
+  async submitLocalScore(submission: LeaderboardSubmission): Promise<void> {
+    recent.unshift(submission);
+    if (recent.length > RECENT_LIMIT) recent.length = RECENT_LIMIT;
+    if (gameCenterService.isAuthenticated()) {
+      await gameCenterService.submitScore(submission.leaderboardId, submission.score);
+    }
+  },
+  /** Snapshot of the in-memory submissions ledger. Newest first. */
+  getRecentSubmissions(): readonly LeaderboardSubmission[] {
+    return recent;
   },
   async getFriendScores(_leaderboardId: string): Promise<LeaderboardEntry[]> {
     // Mock so UI placeholders show realistic content. Replace with a fetch

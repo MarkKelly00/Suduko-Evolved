@@ -8,6 +8,7 @@ import { StarRating } from '@/components/ui/StarRating';
 import { CurrencyPill } from '@/components/ui/CurrencyPill';
 import { campaign } from '@/game/modes/campaign';
 import { getLevelById, nextLevelId } from '@/game/content/levels';
+import { gameCenterService } from '@/services/social/gameCenterService';
 import {
   colors,
   fontFamily,
@@ -24,8 +25,21 @@ import type { RootRouteProp, RootStackNavigation } from '@/app/navigation/routes
 function ResultsScreen() {
   const navigation = useNavigation<RootStackNavigation>();
   const route = useRoute<RootRouteProp<'Results'>>();
-  const { levelId, score, stars, crown, timeSeconds, mistakes, hintsUsed, xp } = route.params;
-  const level = getLevelById(levelId);
+  const {
+    levelId,
+    score,
+    stars,
+    crown,
+    timeSeconds,
+    mistakes,
+    hintsUsed,
+    xp,
+    mode = 'campaign',
+    sprintModeId,
+    sprintCleared,
+  } = route.params;
+  const isSprint = mode === 'sprint';
+  const level = isSprint ? null : getLevelById(levelId);
 
   useEffect(() => {
     audioService.playPuzzleComplete();
@@ -33,9 +47,13 @@ function ResultsScreen() {
     else hapticsService.success();
   }, [crown]);
 
-  const nextId = nextLevelId(levelId);
+  const nextId = isSprint ? null : nextLevelId(levelId);
 
   const handleNext = () => {
+    if (isSprint && sprintModeId) {
+      navigation.replace('TimeTrialGame', { modeId: sprintModeId });
+      return;
+    }
     if (!nextId) {
       navigation.navigate('Map');
       return;
@@ -43,22 +61,44 @@ function ResultsScreen() {
     if (campaign.startLevel(nextId)) navigation.replace('Game', { levelId: nextId });
   };
   const handleReplay = () => {
+    if (isSprint && sprintModeId) {
+      navigation.replace('TimeTrialGame', { modeId: sprintModeId });
+      return;
+    }
     if (campaign.startLevel(levelId)) navigation.replace('Game', { levelId });
   };
-  const handleMap = () => navigation.navigate('Map');
+  const handleMap = () => {
+    if (isSprint) navigation.navigate('TimeTrial');
+    else navigation.navigate('Map');
+  };
   const handleChallenge = () => {
     // Phase 6+: open friend challenge sheet.
     navigation.navigate('Profile');
   };
 
+  const heroEyebrow = isSprint
+    ? sprintCleared
+      ? 'SPRINT CLEARED'
+      : 'TIME UP'
+    : level
+      ? `LEVEL ${level.index}`
+      : 'COMPLETE';
+  const heroTitle = isSprint
+    ? sprintCleared
+      ? 'Lightning Solve'
+      : 'Best of 3 Minutes'
+    : crown
+      ? 'Perfect Bloom'
+      : 'Cleared';
+
   return (
     <ScreenBackground>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.heroBlock}>
-          <Text style={styles.eyebrow}>{level ? `LEVEL ${level.index}` : 'COMPLETE'}</Text>
-          <Text style={styles.title}>{crown ? 'Perfect Bloom' : 'Cleared'}</Text>
+          <Text style={styles.eyebrow}>{heroEyebrow}</Text>
+          <Text style={styles.title}>{heroTitle}</Text>
           <View style={styles.starsWrap}>
-            <StarRating stars={stars} crown={crown} size={36} />
+            <StarRating stars={stars} crown={!isSprint && crown} size={36} />
           </View>
         </View>
 
@@ -79,19 +119,31 @@ function ResultsScreen() {
         <GlassCard style={styles.card}>
           <Text style={styles.sectionTitle}>Friends</Text>
           <Text style={styles.placeholderText}>
-            Friend leaderboards arrive in a future update. Game Center submission hooks are in
-            place — connect once your build is signed and Game Center capability is enabled.
+            {gameCenterService.isAuthenticated()
+              ? `Score submitted to Game Center as ${
+                  gameCenterService.currentPlayer()?.displayName ?? 'you'
+                }. Friend leaderboards open in the next update.`
+              : 'Friend leaderboards arrive in a future update. Game Center submission hooks are in place — connect once your build is signed and Game Center capability is enabled.'}
           </Text>
         </GlassCard>
 
         <View style={styles.actions}>
           <PremiumButton
-            label={nextId ? 'Next Level' : 'Back to Map'}
+            label={
+              isSprint ? 'Race Again' : nextId ? 'Next Level' : 'Back to Map'
+            }
             onPress={handleNext}
             variant="primary"
           />
-          <PremiumButton label="Replay" onPress={handleReplay} variant="secondary" />
-          <PremiumButton label="Saga Map" onPress={handleMap} variant="ghost" compact />
+          {!isSprint ? (
+            <PremiumButton label="Replay" onPress={handleReplay} variant="secondary" />
+          ) : null}
+          <PremiumButton
+            label={isSprint ? 'Time Trial Menu' : 'Saga Map'}
+            onPress={handleMap}
+            variant="ghost"
+            compact
+          />
           <PremiumButton
             label="Challenge a friend"
             onPress={handleChallenge}

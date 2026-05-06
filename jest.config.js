@@ -9,6 +9,7 @@ module.exports = {
   preset: 'jest-expo',
   testMatch: [
     '<rootDir>/src/game/engine/**/*.test.ts',
+    '<rootDir>/src/game/modes/**/*.test.ts',
     '<rootDir>/src/services/persistence/**/*.test.ts',
   ],
   testPathIgnorePatterns: ['/node_modules/', '/ios/', '/android/'],

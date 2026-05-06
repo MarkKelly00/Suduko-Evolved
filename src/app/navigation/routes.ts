@@ -10,6 +10,13 @@ export interface ResultsRouteParams {
   mistakes: number;
   hintsUsed: number;
   xp: number;
+  /** Source mode — drives Results copy + CTA wording. Defaults to campaign. */
+  mode?: 'campaign' | 'sprint';
+  /** Sprint-only metadata for friend challenges + leaderboards. */
+  sprintModeId?: string;
+  sprintSeed?: string;
+  /** True iff a sprint completed before the timer expired. */
+  sprintCleared?: boolean;
 }
 
 export type RootStackParamList = {
@@ -18,6 +25,7 @@ export type RootStackParamList = {
   Game: { levelId: string };
   Results: ResultsRouteParams;
   TimeTrial: undefined;
+  TimeTrialGame: { modeId: string };
   Profile: undefined;
   Settings: undefined;
 };

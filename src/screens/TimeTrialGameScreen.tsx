@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { ScreenBackground } from '@/components/ui/ScreenBackground';
@@ -8,12 +8,19 @@ import { NumberPad } from '@/components/board/NumberPad';
 import { CompletionOverlay } from '@/components/board/CompletionOverlay';
 import { EffectsLayer } from '@/components/effects/EffectsLayer';
 import { PremiumButton } from '@/components/ui/PremiumButton';
-import { useGameStore } from '@/game/state/useGameStore';
+import {
+  selectTimeRemainingMs,
+  useGameStore,
+} from '@/game/state/useGameStore';
 import { useProgressStore } from '@/game/state/useProgressStore';
 import { calculateScore, calculateStars, calculateXP } from '@/game/engine';
+import {
+  dailySeed,
+  deterministicSprintSeed,
+  getTimeTrialMode,
+  synthesizeSprintLevel,
+} from '@/game/modes/timeTrial';
 import { leaderboardService } from '@/services/social/leaderboardService';
-import { campaign } from '@/game/modes/campaign';
-import { getLevelById, nextLevelId } from '@/game/content/levels';
 import {
   colors,
   fontFamily,
@@ -27,50 +34,71 @@ import {
 import { formatTime } from '@/utils/formatTime';
 import type { RootRouteProp, RootStackNavigation } from '@/app/navigation/routes';
 
-function GameScreen() {
+/**
+ * Time Trial game screen. Same board + number pad + completion VFX as the
+ * campaign, but driven by a downward-counting clock. The session ends when:
+ *   • the player completes the puzzle (`status === 'won'`) — best case;
+ *   • the timer expires (`status === 'timedOut'`) — partial credit.
+ *
+ * In both cases we tally the final score with the campaign scoring pipeline
+ * (re-using its tested behavior), persist a per-mode best, fire a
+ * leaderboard submission stub for future Game Center wiring, and route to
+ * the existing Results screen with `mode: 'sprint'` so the copy/CTAs
+ * change without forking the screen.
+ */
+function TimeTrialGameScreen() {
   const navigation = useNavigation<RootStackNavigation>();
-  const route = useRoute<RootRouteProp<'Game'>>();
-  const { levelId } = route.params;
+  const route = useRoute<RootRouteProp<'TimeTrialGame'>>();
+  const { modeId } = route.params;
+  const mode = useMemo(() => getTimeTrialMode(modeId), [modeId]);
 
-  const active = useGameStore((s) => s.active);
   const status = useGameStore((s) => s.active?.status ?? 'playing');
   const elapsedMs = useGameStore((s) => s.active?.elapsedMs ?? 0);
+  const timeRemainingMs = useGameStore(selectTimeRemainingMs);
   const mistakes = useGameStore((s) => s.active?.mistakes ?? 0);
   const streak = useGameStore((s) => s.active?.streak ?? 0);
   const tallies = useGameStore((s) => s.active?.tallies ?? null);
 
-  const level = useMemo(() => getLevelById(levelId), [levelId]);
+  // Each mount picks a fresh seed (or the daily one). Stored in a ref so
+  // the React effect below doesn't re-roll between renders.
+  const sessionRef = useRef<{ seed: string; runStartedAt: number } | null>(null);
 
-  // Start a session if the navigated levelId doesn't match the active one
-  // (e.g. user came from Results → Replay → ourselves).
   useEffect(() => {
-    if (!level) return;
-    if (!active || active.level.id !== level.id) {
-      campaign.startLevel(level.id);
+    if (!mode) return;
+    if (sessionRef.current == null) {
+      const seed = mode.daily
+        ? dailySeed()
+        : deterministicSprintSeed(mode.id, Date.now());
+      sessionRef.current = { seed, runStartedAt: Date.now() };
     }
+    const { seed } = sessionRef.current;
+    const level = synthesizeSprintLevel(mode, seed);
+    useGameStore.getState().startSprintSession({
+      modeId: mode.id,
+      level,
+      durationSeconds: mode.durationSeconds,
+    });
     return () => {
-      // When leaving via back button, abandon the session so the timer
-      // stops. Going to Results uses navigation.replace which also unmounts
-      // this screen.
-      const current = useGameStore.getState().active;
-      if (current && current.status !== 'won') {
-        useGameStore.getState().abandonSession();
-      }
+      // Leaving without finishing = abandon. Same semantics as the campaign:
+      // the timer interval shuts off, no result is recorded.
+      const cur = useGameStore.getState().active;
+      if (cur && cur.status === 'playing') useGameStore.getState().abandonSession();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [level?.id]);
+  }, [mode]);
 
-  // When status transitions to 'won', compute the score & navigate.
+  // Terminal state → finalize, persist, navigate.
   useEffect(() => {
-    if (status !== 'won') return;
+    if (status !== 'won' && status !== 'timedOut') return;
     const a = useGameStore.getState().active;
-    if (!a) return;
+    if (!a || a.modeId == null) return;
+
     const elapsedSec = Math.floor(a.elapsedMs / 1000);
-    // For a completed puzzle the player has filled exactly `holeCount` cells
-    // (the original empties) and — because completion is now solution-aware
-    // — every one of them matches the solution. Givens (`81 − holeCount`)
-    // are not "placements" the player gets points for.
-    const correctPlacements = a.puzzle.holeCount;
+    const cleared = status === 'won';
+    // For sprint scoring: count player placements as cells filled (whether
+    // correct or not is folded in via tallies + mistakes). For a partial
+    // run we approximate placements as `holeCount − empties remaining`.
+    const remainingEmpties = countEmpties(a.grid);
+    const correctPlacements = Math.max(0, a.puzzle.holeCount - remainingEmpties - a.mistakes);
     const breakdown = calculateScore({
       correctPlacements,
       tallies: a.tallies,
@@ -89,46 +117,36 @@ function GameScreen() {
     });
     const xp = calculateXP({ scoreTotal: breakdown.total, stars: stars.stars, crown: stars.crown });
 
-    const nextId = nextLevelId(a.level.id) ?? undefined;
-    useProgressStore.getState().recordResult({
-      levelId: a.level.id,
-      stars: stars.stars,
-      crown: stars.crown,
-      score: breakdown.total,
-      time: elapsedSec,
-      xp,
-      cleanRun: a.mistakes === 0 && a.hintsUsed === 0,
-      nextLevelId: nextId,
-    });
+    useProgressStore.getState().recordTimeTrialBest(a.modeId, breakdown.total, elapsedSec);
     void leaderboardService.submitLocalScore({
-      leaderboardId: `campaign.${a.level.worldId}.${a.level.id}`,
+      leaderboardId: `tt.${a.modeId}`,
       levelId: a.level.id,
       seed: a.puzzle.seed,
       score: breakdown.total,
       time: elapsedSec,
       mistakes: a.mistakes,
       hintsUsed: a.hintsUsed,
-      moveCount: a.puzzle.holeCount,
+      moveCount: 81 - remainingEmpties - (81 - a.puzzle.holeCount),
       timestamp: Date.now(),
     });
 
     useGameStore.getState().endSession();
-
     navigation.replace('Results', {
       levelId: a.level.id,
       score: breakdown.total,
       stars: stars.stars,
-      crown: stars.crown,
+      crown: cleared && stars.crown,
       timeSeconds: elapsedSec,
       mistakes: a.mistakes,
       hintsUsed: a.hintsUsed,
       xp,
+      mode: 'sprint',
+      sprintModeId: a.modeId,
+      sprintSeed: a.puzzle.seed,
+      sprintCleared: cleared,
     });
   }, [status, navigation]);
 
-  // Hooks must be declared before any conditional return — `togglePause`
-  // moved up here so the React hooks rule is satisfied even when the
-  // level-not-found branch renders early below.
   const togglePause = useCallback(() => {
     const cur = useGameStore.getState();
     if (!cur.active) return;
@@ -136,12 +154,12 @@ function GameScreen() {
     else if (cur.active.status === 'paused') cur.resumeSession();
   }, []);
 
-  if (!level) {
+  if (!mode) {
     return (
       <ScreenBackground>
-        <TopBar title="Level not found" />
+        <TopBar title="Time Trial" />
         <View style={styles.errorWrap}>
-          <Text style={styles.errorText}>{`Level "${levelId}" doesn’t exist.`}</Text>
+          <Text style={styles.errorText}>{`Mode "${modeId}" not found.`}</Text>
         </View>
       </ScreenBackground>
     );
@@ -152,12 +170,16 @@ function GameScreen() {
     (tallies?.colsCompleted ?? 0) +
     (tallies?.boxesCompleted ?? 0);
 
+  const remaining = timeRemainingMs ?? mode.durationSeconds * 1000;
+  const lowTime = remaining <= 30_000;
+  const veryLowTime = remaining <= 10_000;
+
   return (
     <ScreenBackground>
       <TopBar
-        title={`Level ${level.index} · ${level.difficulty}`}
+        title={mode.name}
         rightSlot={
-          status !== 'won' ? (
+          status === 'playing' || status === 'paused' ? (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={status === 'paused' ? 'Resume' : 'Pause'}
@@ -165,17 +187,23 @@ function GameScreen() {
               style={styles.topBarButton}
               hitSlop={8}
             >
-              <Text style={styles.topBarButtonText}>
-                {status === 'paused' ? '▶' : 'Ⅱ'}
-              </Text>
+              <Text style={styles.topBarButtonText}>{status === 'paused' ? '▶' : 'Ⅱ'}</Text>
             </Pressable>
           ) : null
         }
       />
       <View style={styles.statusRow}>
-        <Stat label="Time" value={formatTime(elapsedMs)} />
-        <Stat label="Mistakes" value={`${mistakes}`} accent={mistakes > 0 ? colors.mistake : undefined} />
-        <Stat label="Streak" value={`${streak}`} />
+        <Stat
+          label="Time Left"
+          value={formatTime(remaining)}
+          accent={veryLowTime ? colors.mistake : lowTime ? colors.warning : undefined}
+        />
+        <Stat label="Score Streak" value={`${streak}`} />
+        <Stat
+          label="Mistakes"
+          value={`${mistakes}`}
+          accent={mistakes > 0 ? colors.mistake : undefined}
+        />
         <Stat label="Regions" value={`${totalCompletions}`} />
       </View>
 
@@ -184,12 +212,19 @@ function GameScreen() {
           <SudokuBoard size={layout.boardMaxWidth} />
           <EffectsLayer boardSize={layout.boardMaxWidth} />
           <CompletionOverlay />
-          {status === 'paused' ? <PausedScrim onResume={togglePause} /> : null}
+          {status === 'paused' ? (
+            <PausedScrim onResume={togglePause} />
+          ) : null}
         </View>
       </View>
 
       <View style={styles.padWrap}>
         <NumberPad disabled={status !== 'playing'} />
+      </View>
+      <View style={styles.metaRow}>
+        <Text style={styles.metaText}>
+          Elapsed {formatTime(elapsedMs)} · Seed {mode.daily ? 'daily' : 'rolling'}
+        </Text>
       </View>
     </ScreenBackground>
   );
@@ -203,10 +238,10 @@ function PausedScrim({ onResume }: { onResume: () => void }) {
       accessibilityLiveRegion="polite"
     >
       <View style={styles.pausedPanel}>
-        <Text style={styles.pausedEyebrow}>PAUSED</Text>
-        <Text style={styles.pausedTitle}>Take a breath</Text>
+        <Text style={styles.pausedEyebrow}>SPRINT PAUSED</Text>
+        <Text style={styles.pausedTitle}>Catch your breath</Text>
         <Text style={styles.pausedBody}>
-          Your timer is on hold. Tap Resume when you&apos;re ready.
+          The clock is on hold. Tap Resume to keep racing.
         </Text>
         <PremiumButton
           label="Resume"
@@ -229,7 +264,17 @@ function Stat({ label, value, accent }: { label: string; value: string; accent?:
   );
 }
 
-export default GameScreen;
+function countEmpties(grid: (number | null)[][]): number {
+  let n = 0;
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      if (grid[r]![c] == null) n++;
+    }
+  }
+  return n;
+}
+
+export default TimeTrialGameScreen;
 
 const styles = StyleSheet.create({
   statusRow: {
@@ -239,9 +284,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.base,
     paddingVertical: spacing.sm,
   },
-  stat: {
-    alignItems: 'center',
-  },
+  stat: { alignItems: 'center', flex: 1 },
   statValue: {
     color: colors.text,
     fontSize: fontSize.lg,
@@ -260,24 +303,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: spacing.base,
   },
-  boardStack: {
-    position: 'relative',
-  },
+  boardStack: { position: 'relative' },
   padWrap: {
     paddingTop: spacing.sm,
+    paddingBottom: spacing.sm,
+  },
+  metaRow: {
+    paddingHorizontal: spacing.lg,
     paddingBottom: spacing.base,
-  },
-  errorWrap: {
-    flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.lg,
   },
-  errorText: {
-    color: colors.textMuted,
-    fontSize: fontSize.base,
-    textAlign: 'center',
+  metaText: {
+    color: colors.textDim,
+    fontSize: fontSize.xxs,
+    letterSpacing: letterSpacing.wide,
   },
+  errorWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
+  errorText: { color: colors.textMuted, fontSize: fontSize.base, textAlign: 'center' },
   topBarButton: {
     width: 36,
     height: 36,
@@ -296,8 +338,6 @@ const styles = StyleSheet.create({
   },
   pausedScrim: {
     ...StyleSheet.absoluteFillObject,
-    // Darker scrim than the previous overlay so the busy board recedes
-    // and the panel reads first.
     backgroundColor: 'rgba(7, 11, 23, 0.74)',
     borderRadius: radius.md,
     alignItems: 'center',
@@ -305,9 +345,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.base,
   },
   pausedPanel: {
-    // Glass card centered inside the scrim. The opaque-ish navy fill +
-    // border + shadow ensures even the body copy is comfortably readable
-    // regardless of what's on the board behind it.
     width: '100%',
     maxWidth: 320,
     backgroundColor: 'rgba(10, 15, 30, 0.92)',
@@ -339,8 +376,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   pausedBody: {
-    // `text` (not `textMuted`) so the body sits comfortably above the
-    // 60% AA bar even when the board behind has bright digits.
     color: colors.text,
     fontSize: fontSize.sm,
     textAlign: 'center',
@@ -348,8 +383,5 @@ const styles = StyleSheet.create({
     marginTop: spacing.xxs,
     paddingHorizontal: spacing.xs,
   },
-  pausedCta: {
-    marginTop: spacing.base,
-    minWidth: 180,
-  },
+  pausedCta: { marginTop: spacing.base, minWidth: 180 },
 });
