@@ -13,5 +13,6 @@ export { boxIndex, countSolutions, getCandidatesAt, solvePuzzle } from './sudoku
 export { generatePuzzle } from './sudokuGenerator';
 export { getCandidates, validateMove } from './moveValidator';
 export { detectCompletionEvents } from './completionDetector';
+export { eliminateNotesForPeers } from './notesElimination';
 export { SCORING, calculateScore, calculateStars, calculateXP } from './scoring';
 export type { ScoreInput, StarsInput } from './scoring';

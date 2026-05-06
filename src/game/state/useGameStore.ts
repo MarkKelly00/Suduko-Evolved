@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import {
   detectCompletionEvents,
+  eliminateNotesForPeers,
   generatePuzzle,
   validateMove,
   type CompletionEvent,
@@ -325,6 +326,14 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (validation.correct) {
       streak += 1;
       if (streak > bestStreak) bestStreak = streak;
+      // Auto-eliminate: a correct placement of `value` makes that digit
+      // logically impossible everywhere it shares a row, column, or 3×3
+      // box with the placed cell. Premium Sudoku apps strip those notes
+      // automatically so the player doesn't have to chase deductions
+      // they've already proven. We only do this on a *correct* placement
+      // — a wrong placement doesn't actually eliminate anything, so
+      // pruning notes on it would silently destroy player work.
+      eliminateNotesForPeers(nextNotes, row, col, value);
     } else {
       mistakes += 1;
       streak = 0;
