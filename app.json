@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "Sudoku Evolved",
+    "slug": "sudoku-evolved",
+    "scheme": "sudokuevolved",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0B1220"
+    },
+    "ios": {
+      "bundleIdentifier": "com.sudokuevolved.app",
+      "supportsTablet": false,
+      "deploymentTarget": "15.1",
+      "buildNumber": "1"
+    },
+    "android": {
+      "package": "com.sudokuevolved.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0B1220"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-audio"
+    ]
+  }
+}
