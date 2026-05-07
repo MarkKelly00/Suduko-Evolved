@@ -8,10 +8,14 @@ import { NumberPad } from '@/components/board/NumberPad';
 import { CompletionOverlay } from '@/components/board/CompletionOverlay';
 import { EffectsLayer } from '@/components/effects/EffectsLayer';
 import { PremiumButton } from '@/components/ui/PremiumButton';
+import { ChallengeBanner } from '@/components/friends/ChallengeBanner';
 import { useGameStore } from '@/game/state/useGameStore';
 import { useProgressStore } from '@/game/state/useProgressStore';
 import { calculateScore, calculateStars, calculateXP } from '@/game/engine';
 import { leaderboardService } from '@/services/social/leaderboardService';
+import { scoreSubmissionService } from '@/services/supabase';
+import { enqueueLevelScore } from '@/game/sync/pendingSubmissionsQueue';
+import { gameCenterService } from '@/services/social/gameCenterService';
 import { campaign } from '@/game/modes/campaign';
 import { getLevelById, nextLevelId } from '@/game/content/levels';
 import {
@@ -30,7 +34,7 @@ import type { RootRouteProp, RootStackNavigation } from '@/app/navigation/routes
 function GameScreen() {
   const navigation = useNavigation<RootStackNavigation>();
   const route = useRoute<RootRouteProp<'Game'>>();
-  const { levelId } = route.params;
+  const { levelId, challengeContext } = route.params;
 
   const active = useGameStore((s) => s.active);
   const status = useGameStore((s) => s.active?.status ?? 'playing');
@@ -100,6 +104,7 @@ function GameScreen() {
       cleanRun: a.mistakes === 0 && a.hintsUsed === 0,
       nextLevelId: nextId,
     });
+    // Local mock leaderboard (kept for offline/visual continuity).
     void leaderboardService.submitLocalScore({
       leaderboardId: `campaign.${a.level.worldId}.${a.level.id}`,
       levelId: a.level.id,
@@ -111,6 +116,27 @@ function GameScreen() {
       moveCount: a.puzzle.holeCount,
       timestamp: Date.now(),
     });
+    // Cloud submission (fire-and-forget; enqueue on failure).
+    const cloudPayload = {
+      levelId: a.level.id,
+      puzzleSeed: a.puzzle.seed,
+      score: breakdown.total,
+      timeSeconds: elapsedSec,
+      mistakes: a.mistakes,
+      hints: a.hintsUsed,
+      stars: stars.stars,
+      crown: stars.crown,
+      moveCount: a.puzzle.holeCount,
+    };
+    void scoreSubmissionService.submitLevelScore(cloudPayload).catch(() => {
+      enqueueLevelScore(cloudPayload);
+    });
+    // Game Center coexistence (best-effort).
+    if (gameCenterService.isAuthenticated()) {
+      void gameCenterService
+        .submitScore(`campaign.${a.level.worldId}.${a.level.id}`, breakdown.total)
+        .catch(() => undefined);
+    }
 
     useGameStore.getState().endSession();
 
@@ -123,8 +149,9 @@ function GameScreen() {
       mistakes: a.mistakes,
       hintsUsed: a.hintsUsed,
       xp,
+      challengeContext,
     });
-  }, [status, navigation]);
+  }, [status, navigation, challengeContext]);
 
   // Hooks must be declared before any conditional return — `togglePause`
   // moved up here so the React hooks rule is satisfied even when the
@@ -172,6 +199,14 @@ function GameScreen() {
           ) : null
         }
       />
+      {challengeContext ? (
+        <ChallengeBanner
+          challengerName={challengeContext.challengerName}
+          challengerAvatarUrl={null}
+          challengerScore={challengeContext.challengerScore}
+          challengerTimeSeconds={challengeContext.challengerTimeSeconds}
+        />
+      ) : null}
       <View style={styles.statusRow}>
         <Stat label="Time" value={formatTime(elapsedMs)} />
         <Stat label="Mistakes" value={`${mistakes}`} accent={mistakes > 0 ? colors.mistake : undefined} />

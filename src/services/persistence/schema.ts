@@ -9,7 +9,15 @@ export const SCHEMA_VERSION = 1 as const;
 export const STORAGE_KEYS = {
   progress: 'progress',
   settings: 'settings',
+  pendingSubmissions: 'pendingSubmissions',
+  deadLetterSubmissions: 'deadLetterSubmissions',
 } as const;
+
+/** Per-account marker that local→cloud migration has run on this device.
+ *  Keyed by user id so a logout/login as the same account is idempotent. */
+export function lastSyncedKey(userId: string): string {
+  return `lastSyncedFor:${userId}`;
+}
 
 // ----- Progress ------------------------------------------------------------
 

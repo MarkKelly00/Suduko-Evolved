@@ -40,7 +40,14 @@
           }
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      "expo-apple-authentication",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.115969849864-7pjll3bmkeokh5sf36sbngl31e6bcbm9"
+        }
+      ]
     ]
   }
 }

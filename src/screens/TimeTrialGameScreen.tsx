@@ -8,6 +8,7 @@ import { NumberPad } from '@/components/board/NumberPad';
 import { CompletionOverlay } from '@/components/board/CompletionOverlay';
 import { EffectsLayer } from '@/components/effects/EffectsLayer';
 import { PremiumButton } from '@/components/ui/PremiumButton';
+import { ChallengeBanner } from '@/components/friends/ChallengeBanner';
 import {
   selectTimeRemainingMs,
   useGameStore,
@@ -21,6 +22,9 @@ import {
   synthesizeSprintLevel,
 } from '@/game/modes/timeTrial';
 import { leaderboardService } from '@/services/social/leaderboardService';
+import { scoreSubmissionService } from '@/services/supabase';
+import { enqueueTimeTrialScore } from '@/game/sync/pendingSubmissionsQueue';
+import { gameCenterService } from '@/services/social/gameCenterService';
 import {
   colors,
   fontFamily,
@@ -49,7 +53,7 @@ import type { RootRouteProp, RootStackNavigation } from '@/app/navigation/routes
 function TimeTrialGameScreen() {
   const navigation = useNavigation<RootStackNavigation>();
   const route = useRoute<RootRouteProp<'TimeTrialGame'>>();
-  const { modeId } = route.params;
+  const { modeId, challengeContext } = route.params;
   const mode = useMemo(() => getTimeTrialMode(modeId), [modeId]);
 
   const status = useGameStore((s) => s.active?.status ?? 'playing');
@@ -66,9 +70,12 @@ function TimeTrialGameScreen() {
   useEffect(() => {
     if (!mode) return;
     if (sessionRef.current == null) {
-      const seed = mode.daily
-        ? dailySeed()
-        : deterministicSprintSeed(mode.id, Date.now());
+      // Challenge plays use the challenger's seed so both opponents see the
+      // same puzzle. Otherwise: daily seed for daily mode, fresh deterministic
+      // seed otherwise.
+      const seed =
+        challengeContext?.puzzleSeed ??
+        (mode.daily ? dailySeed() : deterministicSprintSeed(mode.id, Date.now()));
       sessionRef.current = { seed, runStartedAt: Date.now() };
     }
     const { seed } = sessionRef.current;
@@ -84,7 +91,7 @@ function TimeTrialGameScreen() {
       const cur = useGameStore.getState().active;
       if (cur && cur.status === 'playing') useGameStore.getState().abandonSession();
     };
-  }, [mode]);
+  }, [mode, challengeContext?.puzzleSeed]);
 
   // Terminal state → finalize, persist, navigate.
   useEffect(() => {
@@ -129,6 +136,24 @@ function TimeTrialGameScreen() {
       moveCount: 81 - remainingEmpties - (81 - a.puzzle.holeCount),
       timestamp: Date.now(),
     });
+    const ttCloudPayload = {
+      modeId: a.modeId,
+      puzzleSeed: a.puzzle.seed,
+      score: breakdown.total,
+      timeSeconds: elapsedSec,
+      mistakes: a.mistakes,
+      hints: a.hintsUsed,
+      moveCount: 81 - remainingEmpties - (81 - a.puzzle.holeCount),
+      periodKey: '',
+    };
+    void scoreSubmissionService.submitTimeTrialScore(ttCloudPayload).catch(() => {
+      enqueueTimeTrialScore(ttCloudPayload);
+    });
+    if (gameCenterService.isAuthenticated()) {
+      void gameCenterService
+        .submitScore(`tt.${a.modeId}`, breakdown.total)
+        .catch(() => undefined);
+    }
 
     useGameStore.getState().endSession();
     navigation.replace('Results', {
@@ -144,8 +169,9 @@ function TimeTrialGameScreen() {
       sprintModeId: a.modeId,
       sprintSeed: a.puzzle.seed,
       sprintCleared: cleared,
+      challengeContext,
     });
-  }, [status, navigation]);
+  }, [status, navigation, challengeContext]);
 
   const togglePause = useCallback(() => {
     const cur = useGameStore.getState();
@@ -192,6 +218,14 @@ function TimeTrialGameScreen() {
           ) : null
         }
       />
+      {challengeContext ? (
+        <ChallengeBanner
+          challengerName={challengeContext.challengerName}
+          challengerAvatarUrl={challengeContext.challengerAvatarUrl ?? null}
+          challengerScore={challengeContext.challengerScore}
+          challengerTimeSeconds={challengeContext.challengerTimeSeconds}
+        />
+      ) : null}
       <View style={styles.statusRow}>
         <Stat
           label="Time Left"
