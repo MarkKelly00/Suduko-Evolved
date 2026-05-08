@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { ScreenBackground } from '@/components/ui/ScreenBackground';
@@ -6,9 +6,13 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { PremiumButton } from '@/components/ui/PremiumButton';
 import { StarRating } from '@/components/ui/StarRating';
 import { CurrencyPill } from '@/components/ui/CurrencyPill';
+import { ResultsFriendsPanel } from '@/components/results/ResultsFriendsPanel';
 import { campaign } from '@/game/modes/campaign';
 import { getLevelById, nextLevelId } from '@/game/content/levels';
-import { gameCenterService } from '@/services/social/gameCenterService';
+import { challengeService } from '@/services/supabase';
+import { computeChallengeWinner } from '@/game/sync/challengeWinner';
+import { useAuthStore } from '@/game/state/useAuthStore';
+import { useAuthGate } from '@/components/auth/AuthGate';
 import {
   colors,
   fontFamily,
@@ -25,6 +29,8 @@ import type { RootRouteProp, RootStackNavigation } from '@/app/navigation/routes
 function ResultsScreen() {
   const navigation = useNavigation<RootStackNavigation>();
   const route = useRoute<RootRouteProp<'Results'>>();
+  const requireAuth = useAuthGate();
+  const me = useAuthStore((s) => s.profile);
   const {
     levelId,
     score,
@@ -36,7 +42,9 @@ function ResultsScreen() {
     xp,
     mode = 'campaign',
     sprintModeId,
+    sprintSeed,
     sprintCleared,
+    challengeContext,
   } = route.params;
   const isSprint = mode === 'sprint';
   const level = isSprint ? null : getLevelById(levelId);
@@ -46,6 +54,74 @@ function ResultsScreen() {
     if (crown) hapticsService.puzzleComplete();
     else hapticsService.success();
   }, [crown]);
+
+  // If this was a challenge, post the opponent attempt and route to the
+  // challenge result screen.
+  const submittedRef = useRef(false);
+  useEffect(() => {
+    if (!challengeContext || submittedRef.current || !me) return;
+    submittedRef.current = true;
+    void (async () => {
+      try {
+        await challengeService.submitOpponentAttempt(challengeContext.challengeId, {
+          score,
+          timeSeconds,
+          mistakes,
+          hints: hintsUsed,
+          stars: isSprint ? null : stars,
+          crown: isSprint ? null : crown,
+        });
+      } catch (err) {
+        if (__DEV__) console.warn('[Results] submitOpponentAttempt failed', err);
+      }
+      // Compute winner client-side for snappy UX. Server is authoritative
+      // and the trigger will reconcile in the background.
+      const winnerId = computeChallengeWinner(
+        {
+          score,
+          timeSeconds,
+          mistakes,
+          hints: hintsUsed,
+        },
+        {
+          score: challengeContext.challengerScore,
+          timeSeconds: challengeContext.challengerTimeSeconds,
+          mistakes: challengeContext.challengerMistakes,
+          hints: challengeContext.challengerHints,
+        },
+        me.id,
+        challengeContext.challengerId,
+      );
+      navigation.replace('ChallengeResult', {
+        challengeId: challengeContext.challengeId,
+        mode: isSprint ? 'sprint' : 'campaign',
+        levelId,
+        you: {
+          userId: me.id,
+          name: me.display_name ?? me.username ?? 'You',
+          avatarUrl: me.avatar_url,
+          score,
+          timeSeconds,
+          mistakes,
+          hints: hintsUsed,
+          crown: !isSprint && crown,
+        },
+        them: {
+          userId: challengeContext.challengerId,
+          name: challengeContext.challengerName,
+          avatarUrl: challengeContext.challengerAvatarUrl ?? null,
+          score: challengeContext.challengerScore,
+          timeSeconds: challengeContext.challengerTimeSeconds,
+          mistakes: challengeContext.challengerMistakes,
+          hints: challengeContext.challengerHints,
+          crown: false, // challenger's crown isn't carried in context
+        },
+        winnerId,
+      });
+    })();
+    // We intentionally only run once per Results mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const nextId = isSprint ? null : nextLevelId(levelId);
 
@@ -72,8 +148,29 @@ function ResultsScreen() {
     else navigation.navigate('Map');
   };
   const handleChallenge = () => {
-    // Phase 6+: open friend challenge sheet.
-    navigation.navigate('Profile');
+    if (isSprint && (!sprintModeId || !sprintSeed)) return;
+    const puzzleSeed = isSprint
+      ? sprintSeed!
+      : (level?.seed ?? '');
+    if (!puzzleSeed) return;
+    requireAuth(
+      () =>
+        navigation.navigate('FriendPicker', {
+          mode: isSprint ? 'sprint' : 'campaign',
+          levelId,
+          puzzleSeed,
+          sprintModeId: isSprint ? sprintModeId : null,
+          challengerAttempt: {
+            score,
+            timeSeconds,
+            mistakes,
+            hints: hintsUsed,
+            stars,
+            crown,
+          },
+        }),
+      { contextSubtitle: 'Sign in to challenge a friend.' },
+    );
   };
 
   const heroEyebrow = isSprint
@@ -116,16 +213,22 @@ function ResultsScreen() {
           </View>
         </GlassCard>
 
-        <GlassCard style={styles.card}>
-          <Text style={styles.sectionTitle}>Friends</Text>
-          <Text style={styles.placeholderText}>
-            {gameCenterService.isAuthenticated()
-              ? `Score submitted to Game Center as ${
-                  gameCenterService.currentPlayer()?.displayName ?? 'you'
-                }. Friend leaderboards open in the next update.`
-              : 'Friend leaderboards arrive in a future update. Game Center submission hooks are in place — connect once your build is signed and Game Center capability is enabled.'}
-          </Text>
-        </GlassCard>
+        <ResultsFriendsPanel
+          levelId={levelId}
+          isSprint={isSprint}
+          sprintModeId={sprintModeId}
+          puzzleSeed={
+            isSprint
+              ? (sprintSeed ?? '')
+              : (level?.seed ?? '')
+          }
+          myScore={score}
+          myTimeSeconds={timeSeconds}
+          myMistakes={mistakes}
+          myHints={hintsUsed}
+          myStars={isSprint ? null : stars}
+          myCrown={isSprint ? null : crown}
+        />
 
         <View style={styles.actions}>
           <PremiumButton

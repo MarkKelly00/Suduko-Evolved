@@ -16,7 +16,8 @@
     "ios": {
       "bundleIdentifier": "com.sudokuevolved.app",
       "supportsTablet": false,
-      "buildNumber": "1"
+      "buildNumber": "1",
+      "appleTeamId": "B4H49GDQ8Q"
     },
     "android": {
       "package": "com.sudokuevolved.app",
@@ -25,7 +26,11 @@
         "backgroundColor": "#0B1220"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -40,7 +45,14 @@
           }
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      "expo-apple-authentication",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.115969849864-7pjll3bmkeokh5sf36sbngl31e6bcbm9"
+        }
+      ]
     ]
   }
 }

@@ -1,16 +1,16 @@
 /**
- * Phase 2/3 of MVP runs Jest only on the pure-TypeScript engine and persistence
- * layer (no React Native imports). We use `ts-jest`-style transformation via
- * the `jest-expo` preset, restricted to `src/game/engine/**` and
- * `src/services/persistence/**` to keep the suite fast and free of
- * native-module mocking until later phases add component tests.
+ * Jest restricts to pure-TypeScript layers (no React Native imports) so the
+ * suite stays fast and doesn't need native-module mocks. Add new pure modules
+ * to the testMatch list as they land.
  */
 module.exports = {
   preset: 'jest-expo',
   testMatch: [
     '<rootDir>/src/game/engine/**/*.test.ts',
     '<rootDir>/src/game/modes/**/*.test.ts',
+    '<rootDir>/src/game/sync/**/*.test.ts',
     '<rootDir>/src/services/persistence/**/*.test.ts',
+    '<rootDir>/src/services/supabase/__tests__/username.test.ts',
   ],
   testPathIgnorePatterns: ['/node_modules/', '/ios/', '/android/'],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
@@ -22,7 +22,9 @@ module.exports = {
   ],
   collectCoverageFrom: [
     'src/game/engine/**/*.ts',
+    'src/game/sync/**/*.ts',
     'src/services/persistence/**/*.ts',
+    'src/services/supabase/utils/**/*.ts',
     '!src/**/*.test.ts',
     '!src/**/__tests__/**',
   ],

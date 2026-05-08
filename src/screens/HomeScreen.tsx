@@ -59,6 +59,16 @@ function HomeScreen() {
             variant="secondary"
           />
           <PremiumButton
+            label="Friends"
+            onPress={() => navigation.navigate('Friends')}
+            variant="secondary"
+          />
+          <PremiumButton
+            label="Leaderboard"
+            onPress={() => navigation.navigate('Leaderboard')}
+            variant="secondary"
+          />
+          <PremiumButton
             label="Profile"
             onPress={() => navigation.navigate('Profile')}
             variant="ghost"
