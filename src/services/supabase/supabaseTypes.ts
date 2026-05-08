@@ -298,6 +298,237 @@ export type Database = {
         };
         Relationships: [];
       };
+      duel_rooms: {
+        Row: {
+          completed_at: string | null;
+          created_at: string;
+          created_by: string | null;
+          difficulty: string | null;
+          expires_at: string | null;
+          id: string;
+          level_id: string | null;
+          mode: string;
+          puzzle_seed: string;
+          start_at: string | null;
+          status: string;
+          updated_at: string;
+          winner_id: string | null;
+        };
+        Insert: {
+          completed_at?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          difficulty?: string | null;
+          expires_at?: string | null;
+          id?: string;
+          level_id?: string | null;
+          mode: string;
+          puzzle_seed: string;
+          start_at?: string | null;
+          status?: string;
+          updated_at?: string;
+          winner_id?: string | null;
+        };
+        Update: {
+          completed_at?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          difficulty?: string | null;
+          expires_at?: string | null;
+          id?: string;
+          level_id?: string | null;
+          mode?: string;
+          puzzle_seed?: string;
+          start_at?: string | null;
+          status?: string;
+          updated_at?: string;
+          winner_id?: string | null;
+        };
+        Relationships: [];
+      };
+      duel_participants: {
+        Row: {
+          completed_units: Json;
+          current_score: number;
+          finished_at: string | null;
+          id: string;
+          joined_at: string;
+          last_seen_at: string;
+          opponent_slot: number;
+          progress_percent: number;
+          room_id: string;
+          status: string;
+          user_id: string;
+        };
+        Insert: {
+          completed_units?: Json;
+          current_score?: number;
+          finished_at?: string | null;
+          id?: string;
+          joined_at?: string;
+          last_seen_at?: string;
+          opponent_slot: number;
+          progress_percent?: number;
+          room_id: string;
+          status?: string;
+          user_id: string;
+        };
+        Update: {
+          completed_units?: Json;
+          current_score?: number;
+          finished_at?: string | null;
+          id?: string;
+          joined_at?: string;
+          last_seen_at?: string;
+          opponent_slot?: number;
+          progress_percent?: number;
+          room_id?: string;
+          status?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      duel_attempts: {
+        Row: {
+          app_background_count: number;
+          completed_at: string;
+          crown: boolean;
+          final_grid: Json | null;
+          hints: number;
+          id: string;
+          mistakes: number;
+          move_count: number | null;
+          move_timeline: Json | null;
+          reconnect_count: number;
+          room_id: string;
+          score: number;
+          stars: number | null;
+          suspicious: boolean;
+          time_ms: number;
+          user_id: string;
+        };
+        Insert: {
+          app_background_count?: number;
+          completed_at?: string;
+          crown?: boolean;
+          final_grid?: Json | null;
+          hints?: number;
+          id?: string;
+          mistakes?: number;
+          move_count?: number | null;
+          move_timeline?: Json | null;
+          reconnect_count?: number;
+          room_id: string;
+          score: number;
+          stars?: number | null;
+          suspicious?: boolean;
+          time_ms: number;
+          user_id: string;
+        };
+        Update: {
+          app_background_count?: number;
+          completed_at?: string;
+          crown?: boolean;
+          final_grid?: Json | null;
+          hints?: number;
+          id?: string;
+          mistakes?: number;
+          move_count?: number | null;
+          move_timeline?: Json | null;
+          reconnect_count?: number;
+          room_id?: string;
+          score?: number;
+          stars?: number | null;
+          suspicious?: boolean;
+          time_ms?: number;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      matchmaking_queue: {
+        Row: {
+          created_at: string;
+          expires_at: string;
+          id: string;
+          mode: string;
+          room_id: string | null;
+          skill_bracket: string | null;
+          status: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          expires_at?: string;
+          id?: string;
+          mode: string;
+          room_id?: string | null;
+          skill_bracket?: string | null;
+          status?: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          expires_at?: string;
+          id?: string;
+          mode?: string;
+          room_id?: string | null;
+          skill_bracket?: string | null;
+          status?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      duel_invites: {
+        Row: {
+          challenger_id: string;
+          created_at: string;
+          expires_at: string;
+          id: string;
+          invite_code: string;
+          level_id: string | null;
+          max_uses: number;
+          mode: string;
+          opponent_id: string | null;
+          puzzle_seed: string;
+          room_id: string | null;
+          status: string;
+          updated_at: string;
+          use_count: number;
+        };
+        Insert: {
+          challenger_id: string;
+          created_at?: string;
+          expires_at?: string;
+          id?: string;
+          invite_code: string;
+          level_id?: string | null;
+          max_uses?: number;
+          mode: string;
+          opponent_id?: string | null;
+          puzzle_seed: string;
+          room_id?: string | null;
+          status?: string;
+          updated_at?: string;
+          use_count?: number;
+        };
+        Update: {
+          challenger_id?: string;
+          created_at?: string;
+          expires_at?: string;
+          id?: string;
+          invite_code?: string;
+          level_id?: string | null;
+          max_uses?: number;
+          mode?: string;
+          opponent_id?: string | null;
+          puzzle_seed?: string;
+          room_id?: string | null;
+          status?: string;
+          updated_at?: string;
+          use_count?: number;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       best_level_scores: {
@@ -336,6 +567,10 @@ export type Database = {
     Functions: {
       compute_challenge_winner: {
         Args: { p_challenge_id: string };
+        Returns: string;
+      };
+      delete_my_account: {
+        Args: Record<string, never>;
         Returns: string;
       };
       friend_leaderboard: {
@@ -401,6 +636,54 @@ export type Database = {
         Args: { p_user_id: string };
         Returns: undefined;
       };
+      cancel_matchmaking: { Args: { p_mode: string }; Returns: undefined };
+      create_duel_link: { Args: { p_mode: string }; Returns: Json };
+      create_friend_duel: {
+        Args: { p_mode: string; p_opponent_id: string };
+        Returns: Json;
+      };
+      duel_seed_for_room: {
+        Args: { p_mode: string; p_room_id: string };
+        Returns: string;
+      };
+      forfeit_duel: { Args: { p_room_id: string }; Returns: undefined };
+      heartbeat_duel: {
+        Args: {
+          p_completed_units?: Json;
+          p_progress_percent: number;
+          p_room_id: string;
+          p_score: number;
+        };
+        Returns: undefined;
+      };
+      is_duel_participant: {
+        Args: { p_room_id: string };
+        Returns: boolean;
+      };
+      join_matchmaking: {
+        Args: { p_mode: string; p_skill_bracket?: string };
+        Returns: Json;
+      };
+      redeem_duel_invite: {
+        Args: { p_invite_code: string };
+        Returns: Json;
+      };
+      submit_duel_attempt: {
+        Args: {
+          p_app_background_count?: number;
+          p_crown?: boolean;
+          p_final_grid?: Json;
+          p_hints: number;
+          p_mistakes: number;
+          p_move_count?: number;
+          p_reconnect_count?: number;
+          p_room_id: string;
+          p_score: number;
+          p_stars?: number;
+          p_time_ms: number;
+        };
+        Returns: Json;
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
@@ -429,3 +712,38 @@ export type LeaderboardRow =
   Database['public']['Functions']['global_leaderboard']['Returns'][number];
 export type TimeTrialLeaderboardRow =
   Database['public']['Functions']['time_trial_leaderboard']['Returns'][number];
+
+// ----- Duels --------------------------------------------------------
+export type DuelRoom = Database['public']['Tables']['duel_rooms']['Row'];
+export type DuelRoomInsert =
+  Database['public']['Tables']['duel_rooms']['Insert'];
+export type DuelParticipant =
+  Database['public']['Tables']['duel_participants']['Row'];
+export type DuelAttempt = Database['public']['Tables']['duel_attempts']['Row'];
+export type DuelAttemptInsert =
+  Database['public']['Tables']['duel_attempts']['Insert'];
+export type DuelInvite = Database['public']['Tables']['duel_invites']['Row'];
+export type MatchmakingQueueRow =
+  Database['public']['Tables']['matchmaking_queue']['Row'];
+
+/** Possible values for `duel_rooms.status`. */
+export type DuelRoomStatus =
+  | 'created'
+  | 'waiting'
+  | 'matched'
+  | 'countdown'
+  | 'active'
+  | 'player_finished'
+  | 'completed'
+  | 'expired'
+  | 'cancelled'
+  | 'disconnected';
+
+/** Possible values for `duel_participants.status`. */
+export type DuelParticipantStatus =
+  | 'joined'
+  | 'ready'
+  | 'active'
+  | 'finished'
+  | 'disconnected'
+  | 'forfeited';

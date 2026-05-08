@@ -80,13 +80,27 @@ export function Avatar({ size = 'md', url, fallbackName, progress }: Props) {
     >
       <View style={ringStyle}>
         {url ? (
-          <Animated.View style={[StyleSheet.absoluteFill, !loaded && shimmerStyle]}>
+          <>
+            {/* Shimmer placeholder, layered BEHIND the image so an iOS
+                onLoad miss can't leave the avatar dim forever. Hidden
+                once the image reports loaded; the image itself always
+                renders at full opacity. */}
+            {!loaded ? (
+              <Animated.View
+                style={[
+                  StyleSheet.absoluteFill,
+                  shimmerStyle,
+                  { backgroundColor: colors.surfaceElevated },
+                ]}
+              />
+            ) : null}
             <Image
               source={{ uri: url }}
               style={[styles.image, { width: px, height: px }]}
               onLoad={() => setLoaded(true)}
+              onError={() => setLoaded(true)}
             />
-          </Animated.View>
+          </>
         ) : (
           <View style={[styles.fallback, { width: px, height: px }]}>
             <Text style={[styles.initials, { fontSize: Math.round(px * 0.42) }]}>

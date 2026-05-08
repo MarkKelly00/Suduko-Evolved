@@ -80,14 +80,16 @@ export function SocialButton({
           variant === 'primary' && !disabled && (shadows.goldGlow as object),
         ]}
       >
-        <View style={styles.row}>
-          {leadingIcon ? <View style={styles.icon}>{leadingIcon}</View> : null}
-          {loading ? (
-            <ActivityIndicator color={palette.label.color} />
-          ) : (
+        {loading ? (
+          // Centered spinner — replace icon + label entirely while loading
+          // so the layout doesn't get pulled off-center.
+          <ActivityIndicator color={palette.label.color} />
+        ) : (
+          <View style={styles.row}>
+            {leadingIcon ? <View style={styles.icon}>{leadingIcon}</View> : null}
             <Text style={[styles.label, palette.label]}>{label}</Text>
-          )}
-        </View>
+          </View>
+        )}
       </Pressable>
     </Animated.View>
   );

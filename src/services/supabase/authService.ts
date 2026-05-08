@@ -112,6 +112,12 @@ async function generateNonce(): Promise<{ raw: string; hashed: string }> {
   return { raw, hashed: raw };
 }
 
+// Long enough that the iCloud "sign in to your iPhone" setup flow (if the
+// simulator has no iCloud session) doesn't trip it during normal use, but
+// short enough that a truly-stuck signInAsync doesn't leave the spinner up
+// forever. Real-device flows complete in well under a minute.
+const APPLE_SIGN_IN_TIMEOUT_MS = 120_000;
+
 export async function signInWithApple(): Promise<AuthSession> {
   const supabase = getSupabase();
   if (!supabase) throw new Error('Supabase is not configured');
@@ -121,21 +127,112 @@ export async function signInWithApple(): Promise<AuthSession> {
   if (!available) throw new Error('Apple Sign-In is not available on this device.');
 
   const { raw, hashed } = await generateNonce();
-  const result = await apple.signInAsync({
-    requestedScopes: [
-      apple.AppleAuthenticationScope.FULL_NAME,
-      apple.AppleAuthenticationScope.EMAIL,
-    ],
-    nonce: hashed,
-  });
+  if (__DEV__) console.warn('[Apple] calling signInAsync…');
+  const signInPromise = apple
+    .signInAsync({
+      requestedScopes: [
+        apple.AppleAuthenticationScope.FULL_NAME,
+        apple.AppleAuthenticationScope.EMAIL,
+      ],
+      nonce: hashed,
+    })
+    .then((res) => {
+      if (__DEV__)
+        console.warn('[Apple] signInAsync resolved', {
+          hasToken: !!res.identityToken,
+          hasUser: !!res.user,
+          email: res.email ?? null,
+        });
+      return res;
+    })
+    .catch((err: unknown) => {
+      if (__DEV__) console.warn('[Apple] signInAsync rejected', err);
+      throw err;
+    });
+
+  // Defensive timeout — signInAsync can hang on the simulator without an
+  // iCloud session and never resolve/reject. Without this the UI button
+  // would spin indefinitely.
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(
+      () =>
+        reject(
+          new Error(
+            'Apple Sign-In timed out. On the iOS simulator, sign in to iCloud (Settings → Sign in to your iPhone) or test on a physical device.',
+          ),
+        ),
+      APPLE_SIGN_IN_TIMEOUT_MS,
+    ),
+  );
+  const result = await Promise.race([signInPromise, timeoutPromise]);
   if (!result.identityToken) throw new Error('Apple did not return an identity token.');
 
-  const { data, error } = await supabase.auth.signInWithIdToken({
-    provider: 'apple',
-    token: result.identityToken,
-    nonce: raw,
+  if (__DEV__) console.warn('[Apple] exchanging identity token with Supabase…');
+  // We bypass supabase-js's signInWithIdToken because its internal fetch
+  // hangs on iOS Simulator with no resolution (verified: same endpoint
+  // responds in <300ms via curl from the host Mac, but the supabase-js
+  // wrapper never resolves). A plain fetch + setSession does the same
+  // server work and is reliable across simulator / device / web.
+  const env = getSupabaseEnv();
+  const tokenUrl = `${env.supabaseUrl}/auth/v1/token?grant_type=id_token`;
+  const exchangeController = new AbortController();
+  const timeoutHandle = setTimeout(() => exchangeController.abort(), 30_000);
+  let exchangeResp: Response;
+  try {
+    exchangeResp = await fetch(tokenUrl, {
+      method: 'POST',
+      headers: {
+        apikey: env.supabaseAnonKey,
+        Authorization: `Bearer ${env.supabaseAnonKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        provider: 'apple',
+        id_token: result.identityToken,
+        nonce: raw,
+      }),
+      signal: exchangeController.signal,
+    });
+  } catch (err) {
+    if ((err as { name?: string })?.name === 'AbortError') {
+      throw new Error(
+        'Supabase token exchange timed out after 30s. Check network reachability and that Apple is enabled at Supabase → Authentication → Providers.',
+      );
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutHandle);
+  }
+  if (__DEV__) console.warn('[Apple] exchange status', exchangeResp.status);
+  const payload = (await exchangeResp.json()) as {
+    access_token?: string;
+    refresh_token?: string;
+    user?: AuthUser;
+    msg?: string;
+    error?: string;
+    error_description?: string;
+  };
+  if (!exchangeResp.ok) {
+    const message = payload.msg ?? payload.error_description ?? payload.error ?? 'Unknown error';
+    if (__DEV__) console.warn('[Apple] supabase exchange error', payload);
+    throw new Error(`Supabase: ${message}`);
+  }
+  if (!payload.access_token || !payload.refresh_token) {
+    throw new Error('Supabase: malformed token response.');
+  }
+  // Install the session into the supabase client so subsequent calls are
+  // authenticated. setSession also persists into our MMKV adapter.
+  const { data, error } = await supabase.auth.setSession({
+    access_token: payload.access_token,
+    refresh_token: payload.refresh_token,
   });
-  if (error || !data.session) throw error ?? new Error('Apple sign-in failed.');
+  if (__DEV__) {
+    if (error) console.warn('[Apple] setSession error', error);
+    else console.warn('[Apple] setSession ok', { userId: data.user?.id });
+  }
+  if (error || !data.session) {
+    throw new Error(`Supabase: ${error?.message ?? 'failed to install session'}`);
+  }
 
   // First-login-only display name.
   const fullName = [result.fullName?.givenName, result.fullName?.familyName]
@@ -224,6 +321,36 @@ export async function signOut(): Promise<void> {
   }
 }
 
+/* ------------------------- Delete account ----------------------------- */
+
+/**
+ * Permanently deletes the authenticated user's account by calling the
+ * `delete_my_account` SECURITY DEFINER RPC. The RPC cascades through
+ * public.profiles (deleting all scores, challenges, friendships) and
+ * removes the auth.users row, then we sign out locally to clean session
+ * state.
+ *
+ * Required for App Store compliance (App Store Review Guideline 5.1.1(v)).
+ */
+export async function deleteAccount(): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase is not configured');
+  const { error } = await supabase.rpc('delete_my_account');
+  if (error) throw error;
+  // Tokens are already invalidated server-side; this just clears local
+  // storage and triggers onAuthStateChange listeners.
+  try {
+    await supabase.auth.signOut();
+  } catch {
+    // The auth.users row is already gone, so signOut may 401 — that's fine.
+  }
+  try {
+    loadGoogleSignIn()?.signOut();
+  } catch {
+    // ignore
+  }
+}
+
 /* ------------------------- ensureProfile ------------------------------ */
 
 export interface EnsureProfileResult {
@@ -267,10 +394,4 @@ export async function ensureProfile(user: AuthUser): Promise<EnsureProfileResult
   return { profile, isOnboarding };
 }
 
-/* ---------------------- Account Deletion (scaffold) -------------------- */
-
-export async function deleteAccount(): Promise<void> {
-  // Scaffold: surface "Coming soon" in the UI. Real implementation will hit
-  // an Edge Function that soft-deletes the profile row and revokes session.
-  throw new Error('Account deletion is not yet available.');
-}
+/* (deleteAccount lives above, next to signOut.) */

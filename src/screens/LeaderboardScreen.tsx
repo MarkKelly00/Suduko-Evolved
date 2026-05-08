@@ -1,18 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   RefreshControl,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import { useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 
 import { ScreenBackground } from '@/components/ui/ScreenBackground';
 import { TopBar } from '@/components/ui/TopBar';
-import { GlassCard } from '@/components/ui/GlassCard';
+import { PremiumButton } from '@/components/ui/PremiumButton';
 import { SegmentedTabs } from '@/components/ui/SegmentedTabs';
 import {
   LeaderboardFilterBar,
@@ -25,9 +24,17 @@ import {
 import { useAuthStore } from '@/game/state/useAuthStore';
 import { useProgressStore } from '@/game/state/useProgressStore';
 import { leaderboardService } from '@/services/supabase';
-import { colors, fontSize, fontWeight, spacing } from '@/theme';
+import {
+  colors,
+  fontFamily,
+  fontSize,
+  fontWeight,
+  letterSpacing,
+  spacing,
+} from '@/theme';
 import type {
   LeaderboardScope,
+  RootStackNavigation,
   RootRouteProp,
 } from '@/app/navigation/routes';
 
@@ -40,6 +47,7 @@ const TIME_TRIAL_MODES = [
 
 export default function LeaderboardScreen() {
   const route = useRoute<RootRouteProp<'Leaderboard'>>();
+  const navigation = useNavigation<RootStackNavigation>();
   const me = useAuthStore((s) => s.profile);
   const completedLevelIds = useProgressStore((s) => s.completedLevelIds);
 
@@ -159,14 +167,7 @@ export default function LeaderboardScreen() {
           <ActivityIndicator color={colors.textMuted} />
         </View>
       ) : rows.length === 0 ? (
-        <View style={styles.emptyWrap}>
-          <GlassCard>
-            <Text style={styles.emptyTitle}>
-              {emptyTitleFor(activeTab, filter)}
-            </Text>
-            <Text style={styles.emptyBody}>{emptyBodyFor(activeTab, filter)}</Text>
-          </GlassCard>
-        </View>
+        <EmptyState tab={activeTab} filter={filter} navigation={navigation} />
       ) : (
         <FlatList
           data={rows}
@@ -183,13 +184,14 @@ export default function LeaderboardScreen() {
             <LeaderboardRow
               row={item}
               isCurrentUser={me != null && item.userId === me.id}
+              onPress={() =>
+                me && item.userId !== me.id
+                  ? navigation.navigate('FriendProfile', { userId: item.userId })
+                  : undefined
+              }
               onChallenge={
                 activeTab === 'friends' && me && item.userId !== me.id
-                  ? () =>
-                      Alert.alert(
-                        'Coming soon',
-                        'Direct challenges from leaderboards land in Phase 7.',
-                      )
+                  ? () => navigation.navigate('FriendProfile', { userId: item.userId })
                   : undefined
               }
             />
@@ -213,14 +215,55 @@ async function filterToFriends<T extends { user_id: string }>(
   return rows.filter((r) => friendIds.has(r.user_id));
 }
 
-function emptyTitleFor(tab: Tab, filter: LeaderboardFilterState): string {
-  if (tab === 'friends') return 'No friends here yet';
-  if (filter.mode === 'campaign-level') return 'No scores yet for this level';
-  return 'No scores yet for this mode';
+interface EmptyStateProps {
+  tab: Tab;
+  filter: LeaderboardFilterState;
+  navigation: RootStackNavigation;
 }
-function emptyBodyFor(tab: Tab, _filter: LeaderboardFilterState): string {
-  if (tab === 'friends') return 'Add friends and complete a level together to populate this list.';
-  return 'Be the first to set a score!';
+
+function EmptyState({ tab, filter, navigation }: EmptyStateProps) {
+  const isCampaign = filter.mode === 'campaign-level';
+  const headline =
+    tab === 'friends'
+      ? 'No friends here yet'
+      : isCampaign
+        ? 'Be first on this level'
+        : 'Be first on this mode';
+  const body =
+    tab === 'friends'
+      ? 'Add a friend and finish a puzzle together to climb this board.'
+      : isCampaign
+        ? 'Clear this level cleanly to claim the top spot.'
+        : 'A fast solve plants your name at the top.';
+
+  const cta =
+    tab === 'friends'
+      ? { label: 'Find friends', action: () => navigation.navigate('Friends', { initialTab: 'add' }) }
+      : isCampaign
+        ? { label: 'Open Saga Map', action: () => navigation.navigate('Map') }
+        : {
+            label:
+              filter.timeTrialMode === 'daily-sprint'
+                ? 'Run today’s sprint'
+                : 'Start a 3-Minute Sprint',
+            action: () => navigation.navigate('TimeTrial'),
+          };
+
+  return (
+    <View style={styles.emptyWrap}>
+      <View style={styles.emptyOrnamentWrap}>
+        <View style={styles.emptyOrnamentRing} />
+        <View style={styles.emptyOrnamentDisc}>
+          <Text style={styles.emptyOrnamentSigil}>1</Text>
+        </View>
+      </View>
+      <Text style={styles.emptyHeadline}>{headline}</Text>
+      <Text style={styles.emptyBody}>{body}</Text>
+      <View style={styles.emptyCtaWrap}>
+        <PremiumButton label={cta.label} variant="primary" onPress={cta.action} />
+      </View>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -231,19 +274,68 @@ const styles = StyleSheet.create({
   },
   emptyWrap: {
     flex: 1,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xxl,
+    alignItems: 'center',
   },
-  emptyTitle: {
+  emptyOrnamentWrap: {
+    width: 96,
+    height: 96,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.lg,
+  },
+  emptyOrnamentRing: {
+    position: 'absolute',
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    borderWidth: 1,
+    borderColor: 'rgba(224, 185, 106, 0.25)',
+  },
+  emptyOrnamentDisc: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1.5,
+    borderColor: colors.accentGold,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.accentGoldGlow,
+    shadowOpacity: 0.55,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  emptyOrnamentSigil: {
+    color: colors.accentGold,
+    fontFamily: fontFamily.display,
+    fontSize: 30,
+    fontWeight: fontWeight.heavy,
+    textShadowColor: colors.accentGoldGlow,
+    textShadowRadius: 8,
+    textShadowOffset: { width: 0, height: 0 },
+  },
+  emptyHeadline: {
     color: colors.text,
-    fontSize: fontSize.lg,
+    fontFamily: fontFamily.display,
+    fontSize: fontSize.xl,
     fontWeight: fontWeight.bold,
+    letterSpacing: letterSpacing.tight,
+    textAlign: 'center',
     marginBottom: spacing.xs,
   },
   emptyBody: {
     color: colors.textMuted,
     fontSize: fontSize.sm,
-    lineHeight: fontSize.sm * 1.4,
+    lineHeight: fontSize.sm * 1.45,
+    textAlign: 'center',
+    maxWidth: 280,
+    marginBottom: spacing.xl,
+  },
+  emptyCtaWrap: {
+    width: '100%',
+    maxWidth: 320,
   },
   listContent: {
     paddingHorizontal: spacing.lg,

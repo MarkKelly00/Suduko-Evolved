@@ -6,9 +6,9 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { PremiumButton } from '@/components/ui/PremiumButton';
 import { StarRating } from '@/components/ui/StarRating';
 import { CurrencyPill } from '@/components/ui/CurrencyPill';
+import { ResultsFriendsPanel } from '@/components/results/ResultsFriendsPanel';
 import { campaign } from '@/game/modes/campaign';
 import { getLevelById, nextLevelId } from '@/game/content/levels';
-import { gameCenterService } from '@/services/social/gameCenterService';
 import { challengeService } from '@/services/supabase';
 import { computeChallengeWinner } from '@/game/sync/challengeWinner';
 import { useAuthStore } from '@/game/state/useAuthStore';
@@ -213,16 +213,22 @@ function ResultsScreen() {
           </View>
         </GlassCard>
 
-        <GlassCard style={styles.card}>
-          <Text style={styles.sectionTitle}>Friends</Text>
-          <Text style={styles.placeholderText}>
-            {gameCenterService.isAuthenticated()
-              ? `Score submitted to Game Center as ${
-                  gameCenterService.currentPlayer()?.displayName ?? 'you'
-                }. Friend leaderboards open in the next update.`
-              : 'Friend leaderboards arrive in a future update. Game Center submission hooks are in place — connect once your build is signed and Game Center capability is enabled.'}
-          </Text>
-        </GlassCard>
+        <ResultsFriendsPanel
+          levelId={levelId}
+          isSprint={isSprint}
+          sprintModeId={sprintModeId}
+          puzzleSeed={
+            isSprint
+              ? (sprintSeed ?? '')
+              : (level?.seed ?? '')
+          }
+          myScore={score}
+          myTimeSeconds={timeSeconds}
+          myMistakes={mistakes}
+          myHints={hintsUsed}
+          myStars={isSprint ? null : stars}
+          myCrown={isSprint ? null : crown}
+        />
 
         <View style={styles.actions}>
           <PremiumButton

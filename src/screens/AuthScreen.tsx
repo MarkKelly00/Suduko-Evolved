@@ -162,7 +162,17 @@ function humanizeError(err: unknown): string | null {
   if (msg.includes('not configured')) {
     return 'Auth is not configured yet — running as guest is fine.';
   }
-  if (msg.includes('not available')) {
+  // Pass through informative messages verbatim (timeout, not-available,
+  // iCloud, simulator-only, supabase-side failures).
+  if (
+    msg.includes('timed out') ||
+    msg.includes('not available') ||
+    msg.includes('iCloud') ||
+    msg.includes('physical iPhone') ||
+    msg.includes('real device') ||
+    msg.startsWith('Supabase:') ||
+    msg.includes('Provider')
+  ) {
     return msg;
   }
   return 'Sign-in failed. Please try again.';

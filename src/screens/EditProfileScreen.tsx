@@ -114,9 +114,48 @@ export default function EditProfileScreen() {
 
   const handleDeleteAccount = () => {
     Alert.alert(
-      'Coming soon',
-      'Account deletion will be available in a future update.',
-      [{ text: 'OK' }],
+      'Delete account?',
+      'This permanently removes your profile, avatar, scores, crowns, friends, and challenges. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete forever',
+          style: 'destructive',
+          onPress: () => {
+            // Two-step confirmation — destructive, irreversible.
+            Alert.alert(
+              'Are you sure?',
+              `Type-sized confirm: deleting ${
+                profile?.username ? `@${profile.username}` : 'this account'
+              } will erase everything tied to it on every device.`,
+              [
+                { text: 'Keep account', style: 'cancel' },
+                {
+                  text: 'Delete forever',
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      await authService.deleteAccount();
+                      resetToGuest();
+                      Alert.alert(
+                        'Account deleted',
+                        'Your account and data have been removed. You can keep playing as a guest.',
+                        [{ text: 'OK', onPress: () => navigation.goBack() }],
+                      );
+                    } catch (err) {
+                      const msg =
+                        err instanceof Error
+                          ? err.message
+                          : 'Could not delete your account. Please try again.';
+                      Alert.alert('Deletion failed', msg);
+                    }
+                  },
+                },
+              ],
+            );
+          },
+        },
+      ],
     );
   };
 

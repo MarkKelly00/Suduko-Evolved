@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
+import { linkingConfig } from '@/app/navigation/deepLinks';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { setStorage } from '@/services/persistence/storage';
@@ -84,7 +85,14 @@ export default function App() {
       }
     })();
 
-    unsubscribe = authService.onAuthStateChange(async (event, session) => {
+    // IMPORTANT: keep this callback synchronous and fire heavy work via
+    // setTimeout(0). supabase-js awaits each listener inside its own
+    // setSession() / token-refresh path; if we await Supabase calls in
+    // here we deadlock the auth client (documented gotcha — see
+    // https://supabase.com/docs/reference/javascript/auth-onauthstatechange
+    // "Callbacks can be awaited so an asynchronous request will block all
+    // subsequent client requests until it completes.").
+    unsubscribe = authService.onAuthStateChange((event, session) => {
       const current = useAuthStore.getState();
       if (event === 'SIGNED_OUT') {
         current.resetToGuest();
@@ -94,16 +102,29 @@ export default function App() {
         const wasAuthenticated = current.status === 'authenticated';
         current.setSession(session);
         current.setUser(session.user);
-        try {
-          const { profile, isOnboarding } = await authService.ensureProfile(session.user);
-          current.setProfile(profile);
-          current.setIsOnboarding(isOnboarding);
-        } catch (err) {
-          if (__DEV__) console.warn('[App] ensureProfile (state change) failed', err);
-        }
-        current.setStatus('authenticated');
+        // Defer ensureProfile out of the auth listener so supabase-js can
+        // finish its setSession bookkeeping before we hit it again.
+        setTimeout(() => {
+          void (async () => {
+            try {
+              const { profile, isOnboarding } = await authService.ensureProfile(
+                session.user,
+              );
+              const after = useAuthStore.getState();
+              after.setProfile(profile);
+              after.setIsOnboarding(isOnboarding);
+              after.setStatus('authenticated');
+            } catch (err) {
+              if (__DEV__) console.warn('[App] ensureProfile (state change) failed', err);
+              useAuthStore.getState().setStatus('authenticated');
+            }
+          })();
+        }, 0);
         if (!wasAuthenticated) {
-          void runLocalToCloudSync(session.user.id);
+          // Sync runs its own queries; defer for the same reason.
+          setTimeout(() => {
+            void runLocalToCloudSync(session.user.id);
+          }, 0);
         }
       }
     });
@@ -155,7 +176,7 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }}>
       <SafeAreaProvider>
-        <NavigationContainer theme={navTheme}>
+        <NavigationContainer theme={navTheme} linking={linkingConfig}>
           <StatusBar style="light" />
           <RootNavigator />
         </NavigationContainer>

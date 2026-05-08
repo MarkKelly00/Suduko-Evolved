@@ -116,6 +116,28 @@ export type RootStackParamList = {
 
   FriendPicker: ChallengeFromResult;
   ChallengeResult: ChallengeResultRouteParams;
+
+  // ----- Online Duels --------------------------------------------------
+  Matchmaking: { mode: string };
+  /** Pre-game lobby — server start_at drives the countdown. */
+  DuelLobby: {
+    roomId: string;
+    puzzleSeed: string;
+    mode: string;
+    startAt: string;
+  };
+  /** Live duel — same-seed race with opponent rail. */
+  DuelGame: {
+    roomId: string;
+    puzzleSeed: string;
+    mode: string;
+  };
+  /** Post-duel comparison + rematch / share / add friend. */
+  DuelResults: { roomId: string };
+  /** Universal-link entry. AuthGate first if needed. */
+  DuelInviteJoin: { inviteCode: string };
+  /** Pick a friend to challenge (online-first). */
+  FriendDuelPicker: { mode: string };
 };
 
 export type RootStackNavigation = NativeStackNavigationProp<RootStackParamList>;

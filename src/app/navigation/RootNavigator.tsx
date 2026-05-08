@@ -16,6 +16,12 @@ import FriendProfileScreen from '@/screens/FriendProfileScreen';
 import LeaderboardScreen from '@/screens/LeaderboardScreen';
 import FriendPickerScreen from '@/screens/FriendPickerScreen';
 import ChallengeResultScreen from '@/screens/ChallengeResultScreen';
+import MatchmakingScreen from '@/screens/MatchmakingScreen';
+import DuelLobbyScreen from '@/screens/DuelLobbyScreen';
+import DuelGameScreen from '@/screens/DuelGameScreen';
+import DuelResultsScreen from '@/screens/DuelResultsScreen';
+import DuelInviteJoinScreen from '@/screens/DuelInviteJoinScreen';
+import FriendDuelPickerScreen from '@/screens/FriendDuelPickerScreen';
 import type { RootStackParamList } from './routes';
 import { colors } from '@/theme';
 
@@ -93,6 +99,38 @@ export function RootNavigator() {
       <Stack.Screen
         name="ChallengeResult"
         component={ChallengeResultScreen}
+        options={{ animation: 'slide_from_bottom', presentation: 'modal' }}
+      />
+
+      {/* Online Duels */}
+      <Stack.Screen
+        name="Matchmaking"
+        component={MatchmakingScreen}
+        options={{ animation: 'slide_from_bottom', presentation: 'modal' }}
+      />
+      <Stack.Screen
+        name="DuelLobby"
+        component={DuelLobbyScreen}
+        options={{ animation: 'fade' }}
+      />
+      <Stack.Screen
+        name="DuelGame"
+        component={DuelGameScreen}
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="DuelResults"
+        component={DuelResultsScreen}
+        options={{ animation: 'slide_from_bottom', presentation: 'modal' }}
+      />
+      <Stack.Screen
+        name="DuelInviteJoin"
+        component={DuelInviteJoinScreen}
+        options={{ animation: 'fade' }}
+      />
+      <Stack.Screen
+        name="FriendDuelPicker"
+        component={FriendDuelPickerScreen}
         options={{ animation: 'slide_from_bottom', presentation: 'modal' }}
       />
     </Stack.Navigator>

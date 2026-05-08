@@ -96,7 +96,7 @@ export default function AvatarCropScreen() {
     if (!profile?.id || uploading) return;
     setError(null);
     setUploading(true);
-    setUploadProgress(0.05);
+    setUploadProgress(0.1);
     try {
       const cropped = await cropAndCompress({
         uri,
@@ -107,10 +107,12 @@ export default function AvatarCropScreen() {
         translateX: translateX.value,
         translateY: translateY.value,
       });
-      setUploadProgress(0.45);
-      const data = await fetchAsBlob(cropped.uri);
-      setUploadProgress(0.7);
-      const result = await avatarService.uploadAvatar(profile.id, data, 'image/jpeg');
+      setUploadProgress(0.5);
+      const result = await avatarService.uploadAvatarFromUri(
+        profile.id,
+        cropped.uri,
+        'image/jpeg',
+      );
       setUploadProgress(1);
       setProfile({ ...profile, avatar_path: result.path, avatar_url: result.url });
       hapticsService.success();
@@ -216,28 +218,34 @@ async function cropAndCompress(args: CropArgs): Promise<{ uri: string }> {
   if (!manipulator) throw new Error('expo-image-manipulator missing');
 
   const { uri, srcW, srcH, frame, scale, translateX, translateY } = args;
-  // Center of the cropping circle in screen coords:
-  const cx = frame / 2;
-  const cy = frame / 2;
-  // The image's top-left in screen coords:
-  // It's positioned with style { left: (frame - srcW) / 2, top: (frame - srcH) / 2 }
-  // and then translated. So the on-screen position of the image's top-left:
-  const onScreenLeft = (frame - srcW) / 2 + translateX;
-  const onScreenTop = (frame - srcH) / 2 + translateY;
-  // The image is rendered at native size (srcW × srcH) but transformed by `scale`.
-  // The image-space coord (px, py) for the screen point (cx, cy):
-  // px = (cx - onScreenLeft - srcW/2) / scale + srcW/2
-  // py = (cy - onScreenTop - srcH/2) / scale + srcH/2
-  const centerPxX = (cx - onScreenLeft - srcW / 2) / scale + srcW / 2;
-  const centerPxY = (cy - onScreenTop - srcH / 2) / scale + srcH / 2;
-  const cropSizePx = frame / scale;
-  const originX = clamp(centerPxX - cropSizePx / 2, 0, Math.max(0, srcW - cropSizePx));
-  const originY = clamp(centerPxY - cropSizePx / 2, 0, Math.max(0, srcH - cropSizePx));
+
+  // Center of the crop circle in image-space coords. With the View centered
+  // at the frame center and transform-origin at the View's center, an
+  // unmoved image (translate=0) maps frame-center → image-center.
+  const centerPxX = srcW / 2 - translateX / scale;
+  const centerPxY = srcH / 2 - translateY / scale;
+
+  // Square crop the size of the visible frame, in image-space pixels.
+  // Clamp to fit the image so floating-point overshoot can't push the crop
+  // rectangle outside the source (expo-image-manipulator throws otherwise).
+  const cropSizeRaw = frame / scale;
+  const cropSize = Math.floor(Math.min(cropSizeRaw, srcW, srcH));
+
+  const originX = clamp(
+    Math.round(centerPxX - cropSize / 2),
+    0,
+    srcW - cropSize,
+  );
+  const originY = clamp(
+    Math.round(centerPxY - cropSize / 2),
+    0,
+    srcH - cropSize,
+  );
 
   const result = await manipulator.manipulateAsync(
     uri,
     [
-      { crop: { originX, originY, width: cropSizePx, height: cropSizePx } },
+      { crop: { originX, originY, width: cropSize, height: cropSize } },
       { resize: { width: OUTPUT_SIZE, height: OUTPUT_SIZE } },
     ],
     { compress: 0.85, format: manipulator.SaveFormat.JPEG },
@@ -246,12 +254,8 @@ async function cropAndCompress(args: CropArgs): Promise<{ uri: string }> {
 }
 
 function clamp(n: number, lo: number, hi: number): number {
+  if (hi < lo) return lo; // defensive: degenerate range collapses to lo
   return Math.max(lo, Math.min(hi, n));
-}
-
-async function fetchAsBlob(uri: string): Promise<Blob> {
-  const res = await fetch(uri);
-  return await res.blob();
 }
 
 const styles = StyleSheet.create({

@@ -1,40 +1,39 @@
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { colors, fontSize, fontWeight, letterSpacing, radius, spacing } from '@/theme';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import {
+  colors,
+  fontSize,
+  fontWeight,
+  letterSpacing,
+  radius,
+  spacing,
+} from '@/theme';
+import { hapticsService } from '@/services/haptics/hapticsService';
 
 interface ChipProps {
   label: string;
   active: boolean;
   onPress: () => void;
-  disabled?: boolean;
-  subLabel?: string;
 }
 
-function Chip({ label, active, onPress, disabled, subLabel }: ChipProps) {
+function Chip({ label, active, onPress }: ChipProps) {
   return (
     <Pressable
-      onPress={onPress}
-      disabled={disabled}
+      onPress={() => {
+        if (active) return;
+        hapticsService.selection();
+        onPress();
+      }}
       accessibilityRole="button"
-      accessibilityState={{ selected: active, disabled }}
-      style={[
-        styles.chip,
-        active && styles.chipActive,
-        disabled && styles.chipDisabled,
-      ]}
-      hitSlop={6}
+      accessibilityState={{ selected: active }}
+      style={[styles.chip, active && styles.chipActive]}
+      hitSlop={8}
     >
-      <Text
-        style={[
-          styles.chipLabel,
-          active && styles.chipLabelActive,
-          disabled && styles.chipLabelDisabled,
-        ]}
-      >
+      <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>
         {label}
       </Text>
-      {subLabel ? <Text style={styles.chipSubLabel}>{subLabel}</Text> : null}
     </Pressable>
   );
 }
@@ -43,149 +42,140 @@ export interface LeaderboardFilterState {
   mode: 'campaign-level' | 'time-trial';
   levelId?: string;
   timeTrialMode?: string;
+  /** Reserved for future weekly / daily buckets — only 'all-time' has data. */
   period: 'all-time' | 'week' | 'today';
 }
 
 interface Props {
   state: LeaderboardFilterState;
-  /** Levels the user has completed; first entry is "All best" sigil. */
   campaignLevels: { id: string; label: string }[];
-  /** Available TT modes — typically ['sprint-3min', 'daily-sprint'] */
   timeTrialModes: { id: string; label: string }[];
   onChange: (next: LeaderboardFilterState) => void;
 }
 
+/**
+ * Two-tier filter:
+ *   1. iOS-style pill segmented control (Campaign vs Time Trial). Distinct
+ *      visual from the gold-underline tab above so the hierarchy reads.
+ *   2. Single horizontal chip strip — levels for Campaign, modes for
+ *      Time Trial. We hide the strip entirely when there's exactly one
+ *      option to keep the empty state clean.
+ */
 export function LeaderboardFilterBar({
   state,
   campaignLevels,
   timeTrialModes,
   onChange,
 }: Props) {
-  return (
-    <View style={styles.container}>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.row}
-      >
-        <Chip
-          label="Campaign"
-          active={state.mode === 'campaign-level'}
-          onPress={() =>
-            onChange({
-              ...state,
-              mode: 'campaign-level',
-              levelId: state.levelId ?? campaignLevels[0]?.id,
-            })
-          }
-        />
-        <Chip
-          label="Time Trial"
-          active={state.mode === 'time-trial'}
-          onPress={() =>
-            onChange({
-              ...state,
-              mode: 'time-trial',
-              timeTrialMode: state.timeTrialMode ?? timeTrialModes[0]?.id,
-            })
-          }
-        />
-      </ScrollView>
+  const modeItems = [
+    { key: 'campaign-level' as const, label: 'Campaign' },
+    { key: 'time-trial' as const, label: 'Time Trial' },
+  ];
 
-      {state.mode === 'campaign-level' ? (
+  const renderStrip = () => {
+    if (state.mode === 'campaign-level') {
+      if (campaignLevels.length === 0) {
+        return (
+          <View style={styles.emptyStrip}>
+            <Text style={styles.emptyStripText}>
+              Clear levels to populate this list.
+            </Text>
+          </View>
+        );
+      }
+      return (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.row}
+          accessibilityRole="tablist"
+          accessibilityLabel="Choose level"
         >
-          {campaignLevels.length === 0 ? (
-            <Text style={styles.empty}>Clear levels to populate this list.</Text>
-          ) : (
-            campaignLevels.map((lvl) => (
-              <Chip
-                key={lvl.id}
-                label={lvl.label}
-                active={state.levelId === lvl.id}
-                onPress={() => onChange({ ...state, levelId: lvl.id })}
-              />
-            ))
-          )}
+          {campaignLevels.map((lvl) => (
+            <Chip
+              key={lvl.id}
+              label={lvl.label}
+              active={state.levelId === lvl.id}
+              onPress={() => onChange({ ...state, levelId: lvl.id })}
+            />
+          ))}
         </ScrollView>
-      ) : (
-        <>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.row}
-          >
-            {timeTrialModes.map((m) => (
-              <Chip
-                key={m.id}
-                label={m.label}
-                active={state.timeTrialMode === m.id}
-                onPress={() => onChange({ ...state, timeTrialMode: m.id })}
-              />
-            ))}
-          </ScrollView>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.row}
-          >
-            <Chip
-              label="All-time"
-              active={state.period === 'all-time'}
-              onPress={() => onChange({ ...state, period: 'all-time' })}
-            />
-            <Chip
-              label="This week"
-              active={state.period === 'week'}
-              onPress={() => undefined}
-              disabled
-              subLabel="Coming soon"
-            />
-            <Chip
-              label="Today"
-              active={state.period === 'today'}
-              onPress={() => undefined}
-              disabled
-              subLabel="Coming soon"
-            />
-          </ScrollView>
-        </>
-      )}
+      );
+    }
+    return (
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.row}
+        accessibilityRole="tablist"
+        accessibilityLabel="Choose time trial mode"
+      >
+        {timeTrialModes.map((m) => (
+          <Chip
+            key={m.id}
+            label={m.label}
+            active={state.timeTrialMode === m.id}
+            onPress={() => onChange({ ...state, timeTrialMode: m.id })}
+          />
+        ))}
+      </ScrollView>
+    );
+  };
+
+  return (
+    <View style={styles.container}>
+      <SegmentedControl
+        items={modeItems}
+        activeKey={state.mode}
+        onChange={(key) => {
+          if (key === 'campaign-level') {
+            onChange({
+              ...state,
+              mode: 'campaign-level',
+              levelId: state.levelId ?? campaignLevels[0]?.id,
+            });
+          } else {
+            onChange({
+              ...state,
+              mode: 'time-trial',
+              timeTrialMode: state.timeTrialMode ?? timeTrialModes[0]?.id,
+            });
+          }
+        }}
+      />
+      {renderStrip()}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    paddingTop: spacing.sm,
-    gap: spacing.xs,
     backgroundColor: colors.bg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.divider,
+    paddingTop: spacing.base,
     paddingBottom: spacing.sm,
+    gap: spacing.sm,
   },
   row: {
     paddingHorizontal: spacing.lg,
     gap: spacing.xs,
     flexDirection: 'row',
+    alignItems: 'center',
   },
   chip: {
     paddingHorizontal: spacing.base,
-    paddingVertical: spacing.xs,
+    paddingVertical: 7,
     borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: colors.glassBorder,
-    backgroundColor: colors.surface,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
   },
   chipActive: {
     backgroundColor: colors.surfaceElevated,
     borderColor: colors.accentGold,
-  },
-  chipDisabled: {
-    opacity: 0.5,
+    shadowColor: colors.accentGoldGlow,
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 0 },
   },
   chipLabel: {
     color: colors.textMuted,
@@ -196,18 +186,13 @@ const styles = StyleSheet.create({
   chipLabelActive: {
     color: colors.text,
   },
-  chipLabelDisabled: {
-    color: colors.textDim,
+  emptyStrip: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xs,
   },
-  chipSubLabel: {
-    color: colors.textDim,
-    fontSize: 9,
-    marginTop: 2,
-  },
-  empty: {
+  emptyStripText: {
     color: colors.textMuted,
     fontSize: fontSize.xs,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    fontStyle: 'italic',
   },
 });

@@ -21,6 +21,8 @@ import {
   profileService,
   type Profile,
 } from '@/services/supabase';
+import { useChallengeIntentStore } from '@/game/state/useChallengeIntentStore';
+import { hapticsService } from '@/services/haptics/hapticsService';
 import {
   colors,
   fontFamily,
@@ -81,14 +83,70 @@ export default function FriendProfileScreen() {
   };
 
   const handleChallenge = () => {
+    if (!profile) return;
+    const friendName = profile.display_name ?? profile.username ?? 'this player';
     Alert.alert(
-      'Coming soon',
-      'Challenges launched from a friend profile land in Phase 7.',
+      `Challenge ${friendName}`,
+      'Pick a puzzle to play first. After your run, tap “Send challenge” on the results screen.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Campaign level',
+          onPress: () => {
+            useChallengeIntentStore.getState().setTarget({
+              id: profile.id,
+              display_name: profile.display_name,
+              username: profile.username,
+              avatar_url: profile.avatar_url,
+            });
+            hapticsService.selection();
+            navigation.navigate('Map');
+          },
+        },
+        {
+          text: '3-Minute Sprint',
+          onPress: () => {
+            useChallengeIntentStore.getState().setTarget({
+              id: profile.id,
+              display_name: profile.display_name,
+              username: profile.username,
+              avatar_url: profile.avatar_url,
+            });
+            hapticsService.selection();
+            navigation.navigate('TimeTrial');
+          },
+        },
+      ],
     );
   };
 
   const handleBlock = () => {
-    Alert.alert('Coming soon', 'Blocking will be available in a future update.');
+    if (!profile) return;
+    const friendName = profile.display_name ?? profile.username ?? 'this player';
+    Alert.alert(
+      `Block ${friendName}?`,
+      'They won’t be able to send you friend requests or challenges. You can unblock them later from this screen.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Block',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await friendService.blockUser(profile.id);
+              setStatus('blocked');
+              hapticsService.success();
+            } catch (err) {
+              if (__DEV__) console.warn('[FriendProfile.block]', err);
+              Alert.alert(
+                'Could not block',
+                err instanceof Error ? err.message : 'Please try again.',
+              );
+            }
+          },
+        },
+      ],
+    );
   };
 
   if (loading) {
