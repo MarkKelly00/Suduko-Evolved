@@ -19,14 +19,20 @@
     },
     "production": {
       "autoIncrement": true,
-      "distribution": "store"
+      "distribution": "store",
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://riwfohmydwwsgvnhnzfd.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_UtXy_fZYECd8vQgbftTOYw_cGHrQMqs",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "115969849864-7pjll3bmkeokh5sf36sbngl31e6bcbm9.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "115969849864-377htlsrhd5un3stf5gmd3hcf220dcpo.apps.googleusercontent.com"
+      }
     }
   },
   "submit": {
     "production": {
       "ios": {
         "appleTeamId": "B4H49GDQ8Q",
-        "ascAppId": "REPLACE_WITH_APP_STORE_CONNECT_APP_ID"
+        "ascAppId": "6767898840"
       }
     }
   }
