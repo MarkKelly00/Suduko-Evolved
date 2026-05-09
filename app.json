@@ -3,7 +3,7 @@
     "name": "Sudoku Evolved",
     "slug": "sudoku-evolved",
     "scheme": "sudokuevolved",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -16,10 +16,8 @@
     "ios": {
       "bundleIdentifier": "com.sudokuevolved.app",
       "supportsTablet": false,
-      "buildNumber": "1",
       "appleTeamId": "B4H49GDQ8Q",
       "associatedDomains": [
-        "applinks:sudokuevolved.com",
         "applinks:sudokuevolved.com"
       ],
       "infoPlist": {
