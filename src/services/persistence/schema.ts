@@ -47,6 +47,11 @@ export interface ProgressStoreV1 {
   unlockedLevels: string[];
   timeTrialBests: Record<string, TimeTrialBest>;
   completedLevelIds: string[];
+  /** True once the player has Begun OR Skipped the one-time first-launch
+   *  tutorial modal. Persists forever after. New field; existing v1 saves
+   *  without this key get the default `false` via `migrateProgress` and will
+   *  see the modal once on next launch. */
+  hasSeenTutorial: boolean;
 }
 
 export function defaultProgress(): ProgressStoreV1 {
@@ -59,6 +64,7 @@ export function defaultProgress(): ProgressStoreV1 {
     unlockedLevels: ['world1-level-1'],
     timeTrialBests: {},
     completedLevelIds: [],
+    hasSeenTutorial: false,
   };
 }
 

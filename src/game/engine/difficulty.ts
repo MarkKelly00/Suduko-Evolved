@@ -32,3 +32,25 @@ export const MAX_SOLVER_RECURSION = 200_000;
 
 /** Maximum re-roll attempts before giving up and accepting fewest-givens. */
 export const GENERATOR_MAX_ATTEMPTS = 4;
+
+/**
+ * User-facing label for a difficulty tier.
+ *
+ * `tutorial` is an internal puzzle-generation tier (gentler 30-hole layout
+ * with a longer target time) reserved for levels 1–5 to give new players a
+ * soft on-ramp. The string `"Tutorial"` is reserved exclusively for the
+ * one-time first-launch tutorial modal — it should NEVER appear next to a
+ * level number in the level list or game header. So both `tutorial` and
+ * `easy` map to the same user-facing label, "Easy".
+ */
+export function formatDifficulty(d: Difficulty): string {
+  switch (d) {
+    case 'tutorial':
+    case 'easy':
+      return 'Easy';
+    case 'medium':
+      return 'Medium';
+    case 'hard':
+      return 'Hard';
+  }
+}

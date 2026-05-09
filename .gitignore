@@ -44,7 +44,15 @@ coverage/
 # IDE
 .vscode/
 .idea/
+.cursor/
 
 # generated native folders
 /ios
 /android
+
+# Next.js website (web/)
+web/node_modules/
+web/.next/
+web/out/
+web/.vercel/
+web/next-env.d.ts

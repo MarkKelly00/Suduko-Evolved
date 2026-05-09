@@ -8,7 +8,7 @@ export {
   cloneGrid,
   pickBaseGrid,
 } from './puzzleSeeds';
-export { HOLES, DEFAULT_TARGET_TIME_S, MAX_SOLVER_RECURSION } from './difficulty';
+export { HOLES, DEFAULT_TARGET_TIME_S, MAX_SOLVER_RECURSION, formatDifficulty } from './difficulty';
 export { boxIndex, countSolutions, getCandidatesAt, solvePuzzle } from './sudokuSolver';
 export { generatePuzzle } from './sudokuGenerator';
 export { getCandidates, validateMove } from './moveValidator';

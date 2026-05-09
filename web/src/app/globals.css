@@ -1,0 +1,156 @@
+@import 'tailwindcss';
+@import '../styles/tokens.css';
+
+/*
+ * Tailwind v4 — expose CSS variables as theme tokens so utilities like
+ * bg-bg, text-gold, border-glass-border resolve correctly.
+ */
+@theme inline {
+  --color-bg: var(--color-bg);
+  --color-bg-top: var(--color-bg-top);
+  --color-bg-bottom: var(--color-bg-bottom);
+  --color-surface: var(--color-surface);
+  --color-surface-elevated: var(--color-surface-elevated);
+  --color-surface-pressed: var(--color-surface-pressed);
+  --color-divider: var(--color-divider);
+
+  --color-gold: var(--color-gold);
+  --color-gold-glow: var(--color-gold-glow);
+  --color-gold-dim: var(--color-gold-dim);
+  --color-blue: var(--color-blue);
+  --color-teal: var(--color-teal);
+  --color-purple: var(--color-purple);
+
+  --color-success: var(--color-success);
+  --color-mistake: var(--color-mistake);
+  --color-warning: var(--color-warning);
+
+  --color-text: var(--color-text);
+  --color-text-muted: var(--color-text-muted);
+  --color-text-dim: var(--color-text-dim);
+  --color-text-on-gold: var(--color-text-on-gold);
+
+  --color-garden-sky: var(--color-garden-sky);
+  --color-garden-sky-deep: var(--color-garden-sky-deep);
+  --color-garden-cyan: var(--color-garden-cyan);
+  --color-garden-cyan-glow: var(--color-garden-cyan-glow);
+  --color-garden-bloom: var(--color-garden-bloom);
+  --color-garden-gold: var(--color-garden-gold);
+  --color-garden-gold-glow: var(--color-garden-gold-glow);
+  --color-garden-node-dormant: var(--color-garden-node-dormant);
+  --color-garden-path-core: var(--color-garden-path-core);
+  --color-garden-path-completed: var(--color-garden-path-completed);
+
+  --color-glass-fill: var(--color-glass-fill);
+  --color-glass-border: var(--color-glass-border);
+
+  --font-display: var(--font-display);
+  --font-text: var(--font-text);
+  --font-mono: var(--font-mono);
+}
+
+/* Base styles. Site is dark-only. */
+html,
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  min-height: 100dvh;
+  background:
+    radial-gradient(60% 50% at 50% 0%, rgba(123, 167, 242, 0.06), transparent 70%),
+    radial-gradient(40% 30% at 80% 100%, rgba(94, 231, 196, 0.05), transparent 70%),
+    linear-gradient(180deg, var(--color-bg-top) 0%, var(--color-bg) 35%, var(--color-bg-bottom) 100%);
+  background-attachment: fixed;
+}
+
+::selection {
+  background: rgba(224, 185, 106, 0.35);
+  color: var(--color-text);
+}
+
+/* Reduced motion — disable non-essential transitions and animations. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── Custom utilities ────────────────────────────────────────────────── */
+
+@utility text-glow-gold {
+  color: var(--color-gold-glow);
+  text-shadow:
+    0 0 14px rgba(245, 213, 138, 0.35),
+    0 0 32px rgba(224, 185, 106, 0.18);
+}
+
+@utility text-glow-teal {
+  color: var(--color-garden-cyan-glow);
+  text-shadow:
+    0 0 14px rgba(94, 231, 196, 0.35),
+    0 0 32px rgba(0, 229, 204, 0.18);
+}
+
+@utility glass-card {
+  background-color: var(--color-glass-fill);
+  border: 1px solid var(--color-glass-border);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-radius: 1.25rem;
+}
+
+@utility premium-gradient-bg {
+  background:
+    radial-gradient(80% 60% at 50% 0%, rgba(123, 167, 242, 0.08), transparent 70%),
+    radial-gradient(50% 40% at 80% 100%, rgba(94, 231, 196, 0.06), transparent 70%),
+    linear-gradient(180deg, var(--color-bg-top), var(--color-bg) 35%, var(--color-bg-bottom));
+}
+
+@utility logic-grid-bg {
+  background-image:
+    linear-gradient(rgba(126, 200, 220, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(126, 200, 220, 0.05) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+@utility gold-cta {
+  background: linear-gradient(180deg, var(--color-gold-glow), var(--color-gold));
+  color: var(--color-text-on-gold);
+  box-shadow:
+    0 0 0 1px rgba(245, 213, 138, 0.5),
+    0 10px 30px -8px rgba(224, 185, 106, 0.45),
+    0 0 24px -4px rgba(224, 185, 106, 0.4);
+}
+
+@utility section-eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+@utility serif-display {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+
+/* Focus ring — golden, accessible */
+:where(a, button, [role='button'], input, select, textarea):focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 3px;
+  border-radius: 6px;
+}

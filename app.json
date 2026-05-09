@@ -17,7 +17,14 @@
       "bundleIdentifier": "com.sudokuevolved.app",
       "supportsTablet": false,
       "buildNumber": "1",
-      "appleTeamId": "B4H49GDQ8Q"
+      "appleTeamId": "B4H49GDQ8Q",
+      "associatedDomains": [
+        "applinks:sudokuevolved.com",
+        "applinks:sudokuevolved.com"
+      ],
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.sudokuevolved.app",
@@ -41,7 +48,7 @@
         "expo-build-properties",
         {
           "ios": {
-            "deploymentTarget": "15.1"
+            "deploymentTarget": "16.0"
           }
         }
       ],
@@ -52,7 +59,13 @@
         {
           "iosUrlScheme": "com.googleusercontent.apps.115969849864-7pjll3bmkeokh5sf36sbngl31e6bcbm9"
         }
-      ]
-    ]
+      ],
+      "./plugins/with-pod-warnings"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "32744194-c3ce-4efb-b472-d5dad1ea8e52"
+      }
+    }
   }
 }

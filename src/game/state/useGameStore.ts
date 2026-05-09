@@ -62,7 +62,10 @@ export interface ActiveGame {
 interface UndoFrame {
   grid: Grid;
   notes: number[][][];
-  mistakes: number;
+  // NOTE: `mistakes` is intentionally NOT snapshotted. Undo restores the
+  // board state but the mistake counter must be permanent for the level —
+  // otherwise players can guess freely and undo wrong placements to land a
+  // clean run. This is the cheating exploit we explicitly close.
   streak: number;
   conflicts: SelectedCell[];
   tallies: CompletionTallies;
@@ -121,7 +124,7 @@ function snapshot(active: ActiveGame): UndoFrame {
   return {
     grid: cloneGrid(active.grid),
     notes: cloneNotes(active.notes),
-    mistakes: active.mistakes,
+    // mistakes deliberately omitted — see UndoFrame docs.
     streak: active.streak,
     conflicts: active.conflicts.slice(),
     tallies: { ...active.tallies },
@@ -387,7 +390,9 @@ export const useGameStore = create<GameState>((set, get) => ({
         ...a,
         grid: frame.grid,
         notes: frame.notes,
-        mistakes: frame.mistakes,
+        // a.mistakes is preserved (NOT restored from frame) — the mistake
+        // counter is permanent across undos to close the cheat where players
+        // could guess + undo to fake a clean run.
         streak: frame.streak,
         conflicts: frame.conflicts,
         tallies: frame.tallies,

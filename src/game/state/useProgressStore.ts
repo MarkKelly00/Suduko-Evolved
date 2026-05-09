@@ -30,6 +30,9 @@ interface ProgressActions {
   setLastPlayedLevel: (levelId: string) => void;
   resetStreak: () => void;
   recordTimeTrialBest: (modeId: string, score: number, time: number) => void;
+  /** Mark the one-time first-launch tutorial modal as Begun or Skipped.
+   *  After this is called once, the modal never shows again on this device. */
+  markTutorialSeen: () => void;
   hydrate: () => void;
   reset: () => void;
 }
@@ -53,6 +56,7 @@ function persist(state: ProgressStoreV1): void {
     unlockedLevels: state.unlockedLevels,
     timeTrialBests: state.timeTrialBests,
     completedLevelIds: state.completedLevelIds,
+    hasSeenTutorial: state.hasSeenTutorial,
   };
   getStorage().set(STORAGE_KEYS.progress, payload);
 }
@@ -101,6 +105,7 @@ export const useProgressStore = create<ProgressState>((set, get) => ({
       unlockedLevels,
       timeTrialBests: state.timeTrialBests,
       completedLevelIds,
+      hasSeenTutorial: state.hasSeenTutorial,
     };
     set(next);
     persist(next);
@@ -112,6 +117,12 @@ export const useProgressStore = create<ProgressState>((set, get) => ({
   },
   resetStreak: () => {
     const next: ProgressStoreV1 = { ...progressSlice(get()), currentStreak: 0 };
+    set(next);
+    persist(next);
+  },
+  markTutorialSeen: () => {
+    if (get().hasSeenTutorial) return;
+    const next: ProgressStoreV1 = { ...progressSlice(get()), hasSeenTutorial: true };
     set(next);
     persist(next);
   },
@@ -154,5 +165,6 @@ function progressSlice(s: ProgressState): ProgressStoreV1 {
     unlockedLevels: s.unlockedLevels,
     timeTrialBests: s.timeTrialBests,
     completedLevelIds: s.completedLevelIds,
+    hasSeenTutorial: s.hasSeenTutorial,
   };
 }

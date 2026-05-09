@@ -11,7 +11,7 @@ import { PremiumButton } from '@/components/ui/PremiumButton';
 import { ChallengeBanner } from '@/components/friends/ChallengeBanner';
 import { useGameStore } from '@/game/state/useGameStore';
 import { useProgressStore } from '@/game/state/useProgressStore';
-import { calculateScore, calculateStars, calculateXP } from '@/game/engine';
+import { calculateScore, calculateStars, calculateXP, formatDifficulty } from '@/game/engine';
 import { leaderboardService } from '@/services/social/leaderboardService';
 import { scoreSubmissionService } from '@/services/supabase';
 import { enqueueLevelScore } from '@/game/sync/pendingSubmissionsQueue';
@@ -182,7 +182,7 @@ function GameScreen() {
   return (
     <ScreenBackground>
       <TopBar
-        title={`Level ${level.index} · ${level.difficulty}`}
+        title={`Level ${level.index} · ${formatDifficulty(level.difficulty)}`}
         rightSlot={
           status !== 'won' ? (
             <Pressable

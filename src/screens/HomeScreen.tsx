@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { ScreenBackground } from '@/components/ui/ScreenBackground';
 import { PremiumButton } from '@/components/ui/PremiumButton';
 import { CurrencyPill } from '@/components/ui/CurrencyPill';
+import { TutorialModal } from '@/components/onboarding/TutorialModal';
 import { useProgressStore } from '@/game/state/useProgressStore';
 import { campaign } from '@/game/modes/campaign';
 import { levelId, getLevelById } from '@/game/content/levels';
@@ -22,14 +23,37 @@ function HomeScreen() {
   const totalXP = useProgressStore((s) => s.totalXP);
   const currentStreak = useProgressStore((s) => s.currentStreak);
   const lastPlayedLevel = useProgressStore((s) => s.lastPlayedLevel);
+  const hasSeenTutorial = useProgressStore((s) => s.hasSeenTutorial);
 
   const continueLevelId =
     (lastPlayedLevel && getLevelById(lastPlayedLevel)?.id) ?? levelId(1);
 
-  const handleContinue = () => {
+  // Local visibility flag for the one-time welcome modal. Driven by both the
+  // persisted `hasSeenTutorial` (was the player ever shown it?) and a local
+  // `pending` action — when the player taps Continue without having seen it,
+  // we show the modal first, then chain into Game.
+  const [tutorialVisible, setTutorialVisible] = useState(false);
+
+  const startContinueLevel = () => {
     if (campaign.startLevel(continueLevelId)) {
       navigation.navigate('Game', { levelId: continueLevelId });
     }
+  };
+
+  const handleContinue = () => {
+    if (!hasSeenTutorial) {
+      setTutorialVisible(true);
+      return;
+    }
+    startContinueLevel();
+  };
+
+  const handleTutorialDismiss = (_action: 'begin' | 'skip') => {
+    // Both paths set hasSeenTutorial=true inside the modal. We just close it
+    // and chain into the first level so the player isn't dropped back to the
+    // home screen with nothing happening.
+    setTutorialVisible(false);
+    startContinueLevel();
   };
 
   return (
@@ -86,6 +110,7 @@ function HomeScreen() {
           <Text style={styles.footerText}>World 1 · Logic Garden</Text>
         </View>
       </ScrollView>
+      <TutorialModal visible={tutorialVisible} onDismiss={handleTutorialDismiss} />
     </ScreenBackground>
   );
 }
