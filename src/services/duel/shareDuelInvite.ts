@@ -16,6 +16,30 @@
 import { Alert, Share } from 'react-native';
 import { createDuelLink } from './duelInviteService';
 
+/**
+ * Pull a user-readable message off whatever was thrown. Native `Error`
+ * instances expose `.message` directly, but Supabase SDK errors are POJOs
+ * shaped `{ message, details, hint, code }` — checking only `instanceof
+ * Error` masked their messages as "Something went wrong" the first time
+ * the RPC failed with `function gen_random_bytes does not exist`. This
+ * helper surfaces both shapes (and falls back to a generic line if the
+ * thrown value really has nothing useful).
+ */
+function describeError(err: unknown, fallback: string): string {
+  if (err instanceof Error) return err.message;
+  if (err && typeof err === 'object') {
+    const obj = err as { message?: unknown; hint?: unknown; details?: unknown };
+    if (typeof obj.message === 'string' && obj.message.length > 0) {
+      return obj.message;
+    }
+    if (typeof obj.hint === 'string' && obj.hint.length > 0) return obj.hint;
+    if (typeof obj.details === 'string' && obj.details.length > 0) {
+      return obj.details;
+    }
+  }
+  return fallback;
+}
+
 interface ShareDuelInviteOptions {
   /** Called after a completed share (NOT after cancel or error). */
   onSuccess?: () => void;
@@ -35,9 +59,7 @@ export async function shareDuelInviteLink(
     }
     Alert.alert(
       "Couldn't create invite link",
-      err instanceof Error
-        ? err.message
-        : 'Something went wrong. Please try again.',
+      describeError(err, 'Something went wrong. Please try again.'),
     );
     return false;
   }
@@ -60,9 +82,7 @@ export async function shareDuelInviteLink(
     }
     Alert.alert(
       'Could not open the share sheet',
-      err instanceof Error
-        ? err.message
-        : 'The share sheet failed to open.',
+      describeError(err, 'The share sheet failed to open.'),
     );
     return false;
   }
