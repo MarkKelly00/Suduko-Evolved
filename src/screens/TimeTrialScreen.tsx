@@ -11,7 +11,8 @@ import { DEFAULT_DUEL_MODE_ID } from '@/game/modes/duel';
 import { useProgressStore } from '@/game/state/useProgressStore';
 import { useAuthStore } from '@/game/state/useAuthStore';
 import { useAuthGate } from '@/components/auth/AuthGate';
-import { duelService, duelInviteService } from '@/services/duel';
+import { duelService } from '@/services/duel';
+import { shareDuelInviteLink } from '@/services/duel/shareDuelInvite';
 import {
   colors,
   fontFamily,
@@ -88,19 +89,10 @@ function TimeTrialScreen() {
 
   const onInviteLink = () => {
     requireAuth(
-      async () => {
-        try {
-          const link = await duelInviteService.createDuelLink(
-            DEFAULT_DUEL_MODE_ID,
-          );
-          const { Share } = await import('react-native');
-          await Share.share({
-            message: `Race me on Sudoku Evolved — ${link.shareUrl}`,
-            url: link.shareUrl,
-          });
-        } catch {
-          // ignore — share dialog dismissed or RPC fail
-        }
+      () => {
+        // shareDuelInviteLink handles RPC + Share sheet + error visibility
+        // (Alert on RPC/Share failure, silent on user-cancel).
+        void shareDuelInviteLink(DEFAULT_DUEL_MODE_ID);
       },
       { contextSubtitle: 'Sign in to create a shareable duel link.' },
     );

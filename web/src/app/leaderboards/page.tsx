@@ -22,7 +22,7 @@ export default async function LeaderboardsPage() {
   const configured = isSupabaseConfigured();
   const [global, sprint] = configured
     ? await Promise.all([
-        getGlobalLeaderboard('world1-level1', 25),
+        getGlobalLeaderboard('world1-level-1', 25),
         getTimeTrialLeaderboard('sprint_3min', '', 25),
       ])
     : [[], []];

@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   FlatList,
   Pressable,
-  Share,
   StyleSheet,
   Text,
   View,
@@ -17,6 +16,7 @@ import { Avatar } from '@/components/profile/Avatar';
 import { useAuthStore } from '@/game/state/useAuthStore';
 import { friendService } from '@/services/supabase';
 import { duelInviteService } from '@/services/duel';
+import { shareDuelInviteLink } from '@/services/duel/shareDuelInvite';
 import {
   colors,
   fontFamily,
@@ -75,17 +75,13 @@ export default function FriendDuelPickerScreen() {
     }
   };
 
-  const onShareLink = async () => {
-    try {
-      const link = await duelInviteService.createDuelLink(route.params.mode);
-      await Share.share({
-        message: `Race me on Sudoku Evolved — ${link.shareUrl}`,
-        url: link.shareUrl,
-      });
-      navigation.goBack();
-    } catch {
-      // ignore
-    }
+  const onShareLink = () => {
+    // shareDuelInviteLink handles RPC + Share + error visibility
+    // (Alert on failure, silent on user-cancel). On a completed share we
+    // pop back to the previous screen.
+    void shareDuelInviteLink(route.params.mode, {
+      onSuccess: () => navigation.goBack(),
+    });
   };
 
   if (loading) {

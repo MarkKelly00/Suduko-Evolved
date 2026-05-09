@@ -13,10 +13,8 @@ import { TopBar } from '@/components/ui/TopBar';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { PremiumButton } from '@/components/ui/PremiumButton';
 import { useAuthStore } from '@/game/state/useAuthStore';
-import {
-  matchmakingService,
-  duelInviteService,
-} from '@/services/duel';
+import { matchmakingService } from '@/services/duel';
+import { shareDuelInviteLink } from '@/services/duel/shareDuelInvite';
 import {
   colors,
   fontFamily,
@@ -174,16 +172,13 @@ export default function MatchmakingScreen() {
     cancelledRef.current = true;
     try {
       await matchmakingService.cancelMatchmaking(route.params.mode);
-      const link = await duelInviteService.createDuelLink(route.params.mode);
-      const { Share } = await import('react-native');
-      await Share.share({
-        message: `Race me on Sudoku Evolved — ${link.shareUrl}`,
-        url: link.shareUrl,
-      });
-      navigation.goBack();
     } catch {
-      navigation.goBack();
+      // best-effort cancel — proceed with the share regardless
     }
+    // shareDuelInviteLink handles RPC + Share + error visibility (Alert on
+    // failure, silent on user-cancel). Navigate back regardless of outcome.
+    await shareDuelInviteLink(route.params.mode);
+    navigation.goBack();
   };
 
   return (

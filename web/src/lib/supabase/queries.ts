@@ -76,11 +76,13 @@ export async function getRecentScoresForUser(
 }
 
 /**
- * Global leaderboard for a campaign level. Defaults to world1-level1 for
- * the marketing-friendly default view.
+ * Global leaderboard for a campaign level. Defaults to world1-level-1 — must
+ * match the iOS app's `levelId(index)` format (`world1-level-${index}`),
+ * see src/game/content/levels.ts. Earlier this read `world1-level1` (no
+ * hyphen between "level" and "1") which always returned zero rows.
  */
 export async function getGlobalLeaderboard(
-  levelId = 'world1-level1',
+  levelId = 'world1-level-1',
   limit = 25,
 ): Promise<LeaderboardRow[]> {
   const supabase = getServerSupabase();

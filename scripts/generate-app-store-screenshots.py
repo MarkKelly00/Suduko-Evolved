@@ -30,6 +30,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 # ─── Paths ──────────────────────────────────────────────────────────────────
 ROOT = Path(__file__).resolve().parents[1]
 ZIP_PATH = Path.home() / 'Downloads' / 'Sudoku-Evolved-Screenshots.zip'
+LOOSE_DIR = Path.home() / 'Downloads'  # fallback for screens not in the zip
 OUT_DIR = ROOT / 'assets' / 'app-store-screenshots'
 
 # ─── Apple spec ─────────────────────────────────────────────────────────────
@@ -50,15 +51,25 @@ GEORGIA_BOLD = '/System/Library/Fonts/Supplemental/Georgia Bold.ttf'
 HELVETICA_BOLD = '/System/Library/Fonts/Helvetica.ttc'
 
 # ─── Per-screen content ─────────────────────────────────────────────────────
+# Each entry: (source filename, output slug, marketing caption).
+# The source is looked up first inside ZIP_PATH; if not found, falls back to
+# LOOSE_DIR. This lets us keep the original 7 in the zip while the 3 newer
+# screens live as loose PNGs alongside.
 SCREENSHOTS = [
-    # (zip filename slug, output slug, marketing caption)
-    ('Main-Menu',          'main-menu',          'Pure logic. Cinematic feel.'),
-    ('Saga-Map',           'saga-map',           'Where reason blooms.'),
-    ('Time-Trial',         'time-trial',         'Race the clock.'),
-    ('Leaderboard',        'leaderboard',        'Cleanest solve wins.'),
-    ('Profile',            'profile',            'Stars, crowns, and your saga.'),
-    ('Leaderboard-Global', 'leaderboard-global', 'Climb the global board.'),
-    ('Login',              'login',              'Sign in. Climb the board.'),
+    # ── Solo gameplay arc ──
+    ('Sudoku-Evolved-Main-Menu.jpg',          'main-menu',          'Pure logic. Cinematic feel.'),
+    ('Sudoku-Evolved-Saga-Map.jpg',           'saga-map',           'Where reason blooms.'),
+    ('Sudoku-Evolved-Time-Trial.jpg',         'time-trial',         'Race the clock.'),
+    # ── Social / multiplayer arc ──
+    ('Sudoku-Evolved-Online-Duel.png',        'online-duel',        'Same grid. Same clock.'),
+    ('Sudoku-Evolved-Challenge-A-Friend.png', 'challenge-friend',   'Challenge anyone.'),
+    ('Sudoku-Evolved-Friends.png',            'friends',            'Add friends. Race together.'),
+    # ── Competition arc ──
+    ('Sudoku-Evolved-Leaderboard.jpg',        'leaderboard',        'Cleanest solve wins.'),
+    ('Sudoku-Evolved-Leaderboard-Global.jpg', 'leaderboard-global', 'Climb the global board.'),
+    # ── Personal / sign-in ──
+    ('Sudoku-Evolved-Profile.jpg',            'profile',            'Stars, crowns, and your saga.'),
+    ('Sudoku-Evolved-Login.jpg',              'login',              'Sign in. Climb the board.'),
 ]
 
 
@@ -319,23 +330,41 @@ def build_phone(source: Image.Image, target_h: int = 2150) -> Image.Image:
     return out
 
 
-def render_screenshot(zip_obj: zipfile.ZipFile, slug: str, caption: str, idx: int) -> Path:
-    src_data = zip_obj.read(f'Sudoku-Evolved-{slug}.jpg')
-    source = Image.open(io.BytesIO(src_data)).convert('RGB')
+def load_source(filename: str, zip_obj: zipfile.ZipFile | None) -> Image.Image:
+    """Load a source screenshot. Prefers the zip; falls back to LOOSE_DIR.
 
+    The original 7 captures arrived as JPGs inside ZIP_PATH; the 3 newer
+    captures (Friends, Online-Duel, Challenge-A-Friend) live as loose PNGs
+    in ~/Downloads. This loader treats both transparently so the SCREENSHOTS
+    list can stay flat.
+    """
+    if zip_obj is not None and filename in zip_obj.namelist():
+        return Image.open(io.BytesIO(zip_obj.read(filename))).convert('RGB')
+    loose = LOOSE_DIR / filename
+    if loose.exists():
+        return Image.open(loose).convert('RGB')
+    raise FileNotFoundError(
+        f'Source not found in zip or loose dir: {filename}\n'
+        f'  Looked in: {ZIP_PATH}\n'
+        f'  Looked in: {LOOSE_DIR}'
+    )
+
+
+def render_screenshot(
+    source: Image.Image, out_slug: str, caption: str, idx: int,
+) -> Path:
     canvas = build_backdrop()
     draw_caption(canvas, caption)
 
     # Phone target_h: tuned so the bottom of the bezel sits ~80-100px above
     # the canvas bottom edge. py=560 puts the top of the phone ~200px below
-    # the headline baseline (tighter than the previous 720 → 720-560 = 160px
-    # less white space between caption and phone, per user feedback).
+    # the headline baseline (tighter than the previous 720 — less white
+    # space between caption and phone, per user feedback).
     phone = build_phone(source, target_h=2120)
     px = (CANVAS_W - phone.width) // 2
     py = 560
     canvas.paste(phone.convert('RGBA'), (px, py), phone)
 
-    out_slug = slug.lower().replace('--', '-')
     out_path = OUT_DIR / f'{idx:02d}-{out_slug}.png'
     canvas.save(out_path, format='PNG', optimize=True)
     return out_path
@@ -344,16 +373,23 @@ def render_screenshot(zip_obj: zipfile.ZipFile, slug: str, caption: str, idx: in
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     if not ZIP_PATH.exists():
-        raise SystemExit(f'Zip not found: {ZIP_PATH}')
+        # Allow running without the zip if all sources are loose files
+        print(f'(zip missing — will use loose files only: {LOOSE_DIR})')
+        zip_ctx = None
+    else:
+        zip_ctx = zipfile.ZipFile(ZIP_PATH)
 
-    print(f'Reading source from: {ZIP_PATH}')
-    print(f'Writing outputs to:  {OUT_DIR}')
+    print(f'Writing outputs to: {OUT_DIR}')
     print()
 
-    with zipfile.ZipFile(ZIP_PATH) as z:
-        for i, (zip_slug, _, caption) in enumerate(SCREENSHOTS, start=1):
-            out = render_screenshot(z, zip_slug, caption, i)
-            print(f'  [{i}/{len(SCREENSHOTS)}] {zip_slug:22s} -> {out.name}')
+    try:
+        for i, (src_filename, out_slug, caption) in enumerate(SCREENSHOTS, start=1):
+            source = load_source(src_filename, zip_ctx)
+            render_screenshot(source, out_slug, caption, i)
+            print(f'  [{i}/{len(SCREENSHOTS)}] {src_filename:42s} -> {i:02d}-{out_slug}.png')
+    finally:
+        if zip_ctx is not None:
+            zip_ctx.close()
 
     print()
     print(f'✓ Generated {len(SCREENSHOTS)} App Store screenshots at 1290×2796.')
