@@ -15,8 +15,12 @@ interface PhoneMockupProps {
 export function PhoneMockup({ children, className, floating = true }: PhoneMockupProps) {
   return (
     <div
+      // Explicit responsive widths (NOT `w-full max-w-[…]`) so the mockup
+      // doesn't depend on parent layout for sizing. The previous pattern hit
+      // a CSS Grid chicken-and-egg on mobile (`grid-cols-1` + `mx-auto`
+      // wrapper had no defined width → child `w-full` resolved to 0).
       className={cn(
-        'relative mx-auto w-full max-w-[88vw] sm:max-w-[380px] md:max-w-[320px]',
+        'relative mx-auto w-[88vw] sm:w-[380px] md:w-[320px]',
         floating && 'drop-shadow-[0_30px_60px_rgba(0,0,0,0.55)]',
         className,
       )}
