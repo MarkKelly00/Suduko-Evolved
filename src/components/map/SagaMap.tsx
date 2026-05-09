@@ -50,6 +50,9 @@ import { GardenBackground } from '@/components/map/GardenBackground';
 import { AnimatedLogicPath } from '@/components/map/AnimatedLogicPath';
 import { VineDecorations } from '@/components/map/VineDecorations';
 import { GardenLandmarks } from '@/components/map/GardenLandmarks';
+import { BiomeTransitionGate } from '@/components/map/BiomeTransitionGate';
+import { ActProgressHeader } from '@/components/map/ActProgressHeader';
+import { LevelPreviewModal } from '@/components/map/LevelPreviewModal';
 import {
   ParticleField,
   type ParticleFieldHandle,
@@ -58,7 +61,11 @@ import { WorldHeaderEmblem } from '@/components/map/WorldHeaderEmblem';
 import { WORLD_1 } from '@/game/content/worlds';
 import { WORLD_1_LEVELS, levelId as makeLevelId } from '@/game/content/levels';
 import { useProgressStore } from '@/game/state/useProgressStore';
+import { useAuthGate } from '@/components/auth/AuthGate';
+import { useNavigation as useNav } from '@react-navigation/native';
+import type { RootStackNavigation } from '@/app/navigation/routes';
 import { hapticsService } from '@/services/haptics/hapticsService';
+import type { LevelPreview } from '@/services/levels/levelPreviewService';
 import {
   colors,
   fontFamily,
@@ -87,9 +94,18 @@ const AnimatedScrollView = Animated.createAnimatedComponent(ScrollView);
 
 export function SagaMap({ onSelectLevel }: Props) {
   const navigation = useNavigation();
+  // Cast for typed routes (FriendPicker, Leaderboard) used by the modal CTAs.
+  const stackNav = useNav<RootStackNavigation>();
+  const requireAuth = useAuthGate();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
+
+  // Modal state: which level's preview is open. Null = closed. Tapping a
+  // node opens it (locked or unlocked, the modal renders the appropriate
+  // variant). The modal's Play CTA then closes the modal and calls the
+  // parent's `onSelectLevel`, preserving the existing navigation contract.
+  const [previewLevelIndex, setPreviewLevelIndex] = useState<number | null>(null);
 
   // Single shared value powering every parallax layer (backdrop now,
   // path/terrain/particles in later phases). Lives on the UI thread.
@@ -180,6 +196,69 @@ export function SagaMap({ onSelectLevel }: Props) {
     if (navigation.canGoBack()) navigation.goBack();
   };
 
+  // ─── LevelPreviewModal CTAs ───────────────────────────────────────────────
+  // The modal owns its own visibility lifecycle (controlled by
+  // `previewLevelIndex`). These handlers are wired to: launch gameplay
+  // (preserves the parent contract), open Friends with a same-level
+  // challenge prefilled, or jump to the global leaderboard for this level.
+
+  const handlePlayLevel = (levelIndex: number) => {
+    onSelectLevel(makeLevelId(levelIndex));
+  };
+
+  const handleChallengeFriend = (preview: LevelPreview) => {
+    if (!preview.yourBest) {
+      // No cleared run yet — FriendPicker requires a `challengerAttempt`
+      // payload that doesn't exist yet. Close the modal and politely ask
+      // the player to play it first.
+      setPreviewLevelIndex(null);
+      // Defer so the modal can finish dismissing before the alert lands.
+      setTimeout(() => {
+        // Avoid an Alert here so we don't pull in another module — the
+        // CTA copy already hints at this; logging is enough for QA.
+        if (__DEV__) {
+          console.warn(
+            '[SagaMap] Challenge requires a cleared run; suggest playing first.',
+          );
+        }
+      }, 80);
+      return;
+    }
+    requireAuth(
+      () => {
+        const yb = preview.yourBest!;
+        setPreviewLevelIndex(null);
+        setTimeout(() => {
+          stackNav.navigate('FriendPicker', {
+            mode: 'campaign',
+            levelId: preview.levelId,
+            puzzleSeed: '',
+            challengerAttempt: {
+              score: yb.score,
+              timeSeconds: Math.round(yb.timeMs / 1000),
+              mistakes: yb.mistakes ?? 0,
+              hints: yb.hints ?? 0,
+              stars: (yb.stars === 0 ? 1 : yb.stars) as 1 | 2 | 3,
+              crown: yb.crown,
+            },
+          });
+        }, 80);
+      },
+      { contextSubtitle: 'Sign in to challenge a friend on this level.' },
+    );
+  };
+
+  const handleViewLeaderboard = (preview: LevelPreview) => {
+    setPreviewLevelIndex(null);
+    setTimeout(() => {
+      stackNav.navigate('Leaderboard', {
+        mode: 'campaign-level',
+        levelId: preview.levelId,
+        scope: 'global',
+      });
+    }, 80);
+  };
+
   // Memoized progress predicates so we don't churn re-render keys on
   // every render of the world layers.
   const isCompletedLevel = React.useCallback(
@@ -229,6 +308,14 @@ export function SagaMap({ onSelectLevel }: Props) {
         isCurrent={isCurrentLevel}
       />
       <GardenLandmarks
+        width={width}
+        height={height}
+        yOffset={MAP_TOP_PADDING + stageTopPadding}
+        scrollY={scrollY}
+        isCompleted={isCompletedLevel}
+        isUnlocked={isUnlockedLevel}
+      />
+      <BiomeTransitionGate
         width={width}
         height={height}
         yOffset={MAP_TOP_PADDING + stageTopPadding}
@@ -291,7 +378,7 @@ export function SagaMap({ onSelectLevel }: Props) {
                   crown={crown}
                   isNewlyUnlocked={isNewlyUnlocked}
                   variant={layout.landmark ? 'milestone' : 'default'}
-                  onPress={() => onSelectLevel(level.id)}
+                  onPress={() => setPreviewLevelIndex(level.index)}
                   size={NODE_SIZE}
                 />
               </View>
@@ -311,6 +398,16 @@ export function SagaMap({ onSelectLevel }: Props) {
       >
         <Text style={styles.backIcon}>{'‹'}</Text>
       </Pressable>
+
+      <ActProgressHeader scrollY={scrollY} top={insets.top + spacing.sm} />
+
+      <LevelPreviewModal
+        levelIndex={previewLevelIndex}
+        onClose={() => setPreviewLevelIndex(null)}
+        onPlay={handlePlayLevel}
+        onChallengeFriend={handleChallengeFriend}
+        onViewLeaderboard={handleViewLeaderboard}
+      />
     </View>
   );
 }

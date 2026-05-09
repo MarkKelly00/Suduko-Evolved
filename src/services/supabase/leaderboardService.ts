@@ -93,6 +93,109 @@ export async function getMyRank(
 }
 
 /**
+ * Caller's best row for a level — richer than `LeaderboardRow` because we
+ * query the underlying `level_scores` table directly (mistakes + hints are
+ * stored there but not returned by the public RPC). Used by the modal's
+ * "Your Best" card. Returns null when unauthenticated or no row exists;
+ * the modal should then fall back to `useProgressStore.getLevelEntry()`.
+ */
+export interface YourBestRow {
+  user_id: string;
+  level_id: string;
+  score: number;
+  time_ms: number;
+  mistakes: number;
+  hints: number;
+  stars: number;
+  crown: boolean;
+  completed_at: string;
+  username: string;
+  display_name: string;
+  avatar_url: string;
+}
+
+export async function getYourBestForLevel(
+  levelId: string,
+): Promise<YourBestRow | null> {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data, error } = await supabase
+    .from('level_scores')
+    .select(
+      'user_id, level_id, score, time_ms, mistakes, hints, stars, crown, completed_at',
+    )
+    .eq('user_id', user.id)
+    .eq('level_id', levelId)
+    .order('score', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    if (__DEV__) console.warn('[leaderboardService.getYourBestForLevel]', error.message);
+    return null;
+  }
+  if (!data) return null;
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('username, display_name, avatar_url')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  return {
+    user_id: data.user_id,
+    level_id: data.level_id,
+    score: data.score,
+    time_ms: data.time_ms,
+    mistakes: data.mistakes ?? 0,
+    hints: data.hints ?? 0,
+    stars: data.stars ?? 0,
+    crown: !!data.crown,
+    completed_at: data.completed_at,
+    username: profile?.username ?? '',
+    display_name: profile?.display_name ?? '',
+    avatar_url: profile?.avatar_url ?? '',
+  };
+}
+
+/**
+ * The single best score among the user's friends for a level. Returns null
+ * when unauthenticated, no friends, or no friend has cleared the level.
+ * Excludes the caller's own row.
+ */
+export async function getFriendBestForLevel(
+  levelId: string,
+): Promise<LeaderboardRow | null> {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  // Pull a small page from the friend leaderboard and take the first
+  // non-self entry. Limit 5 is generous — typical friends are <=20.
+  const rows = await getFriendLeaderboard(user.id, levelId, 5);
+  return rows.find((r) => r.user_id !== user.id) ?? null;
+}
+
+/**
+ * The single global #1 row for a level. Returns null when no rows exist.
+ * Works unauthenticated (RLS allows anon SELECT on level_scores per
+ * db/003_policies.sql).
+ */
+export async function getGlobalBestForLevel(
+  levelId: string,
+): Promise<LeaderboardRow | null> {
+  const rows = await getGlobalLeaderboard(levelId, 1, 0);
+  return rows[0] ?? null;
+}
+
+/**
  * For the FriendProfileScreen "mutual leaderboard" preview.
  * Returns the friend leaderboard for a level both users have completed.
  */
