@@ -157,19 +157,20 @@ def draw_caption(canvas: Image.Image, headline: str) -> None:
 def build_phone(source: Image.Image, target_h: int = 2080) -> Image.Image:
     """Compose the source screenshot inside an iPhone bezel.
 
-    Mirrors web/src/components/ui/PhoneMockup.tsx:
-      - Outer bezel: navy gradient, large rounded corners
-      - 25px inner padding (the bezel "frame")
-      - Inner screen: navy fill, smaller rounded corners
-      - Source screenshot composited into the screen viewport (cropped to fit)
-      - Dynamic island pill at top
-      - Gold edge sheen overlay
-      - Soft drop shadow underneath
+    Mirrors web/src/components/ui/PhoneMockup.tsx but tuned for screenshot
+    composition:
+      - Phone aspect tracks the SOURCE aspect (no cropping → no lost content
+        like back arrows or XP pills near the screen edges)
+      - inner_radius is gentle (~60px) so rounded corners don't clip UI
+        elements that sit at typical iOS edge-padding (~50px from corner)
+      - NO fake dynamic-island overlay. Sources are screen recordings that
+        already render correctly under/around the device's real DI; drawing
+        a fake DI on top covers legit content (e.g. the home-screen XP pill).
 
-    Source aspect (1320:2558 = 0.516) is preserved by sizing target_h and
-    deriving width.
+    Source aspect drives phone width — main-menu (1320:2558) and others
+    (1320:2682) get slightly different phone widths, but content is
+    pixel-perfect and the variance reads as natural.
     """
-    # Phone outer dimensions — derived from target_h and source aspect ratio
     src_aspect = source.width / source.height
     bezel_pad = 22
     phone_h = target_h
@@ -177,8 +178,9 @@ def build_phone(source: Image.Image, target_h: int = 2080) -> Image.Image:
     inner_w = round(inner_h * src_aspect)
     phone_w = inner_w + 2 * bezel_pad
 
-    outer_radius = 130
-    inner_radius = 110
+    outer_radius = 110
+    inner_radius = 60  # Gentle — iPhone 16 Pro Max display radius equivalent
+                       # at this scale; back arrows at (~50, 40) stay clear.
 
     # ── 1. Drop shadow (blurred dark ellipse below the phone) ──────────────
     shadow_pad = 80
@@ -226,44 +228,26 @@ def build_phone(source: Image.Image, target_h: int = 2080) -> Image.Image:
     )
 
     # ── 3. Inner screen with the source screenshot ─────────────────────────
-    screen = Image.new('RGB', (inner_w, inner_h), NAVY)
-    # Crop source to match the inner screen aspect, then resize
-    src_target_w = inner_w
-    src_target_h = round(src_target_w / src_aspect)
-    if src_target_h < inner_h:
-        # source narrower-than-needed: scale up by height
-        src_target_h = inner_h
-        src_target_w = round(src_target_h * src_aspect)
-    src_resized = source.resize((src_target_w, src_target_h), Image.LANCZOS)
-    # Center-crop into the inner screen rect
-    cx = (src_target_w - inner_w) // 2
-    cy = (src_target_h - inner_h) // 2
-    src_cropped = src_resized.crop((cx, cy, cx + inner_w, cy + inner_h))
-    screen.paste(src_cropped, (0, 0))
+    # Resize source EXACTLY to the inner viewport. Inner aspect tracks
+    # source aspect (computed earlier), so no cropping or letterboxing is
+    # needed — every pixel of the source survives. This keeps the back arrow
+    # (top-left) and XP pill (top-right) intact.
+    src_resized = source.resize((inner_w, inner_h), Image.LANCZOS).convert('RGBA')
 
-    # Round inner-screen corners via mask
-    screen_rgba = screen.convert('RGBA')
+    # Round inner-screen corners via gentle mask (radius=60 — clear of
+    # back-arrow chevrons that sit ~50px from the corner).
     screen_mask = Image.new('L', (inner_w, inner_h), 0)
-    sm = ImageDraw.Draw(screen_mask)
-    sm.rounded_rectangle((0, 0, inner_w - 1, inner_h - 1), radius=inner_radius, fill=255)
-    screen_clipped = Image.new('RGBA', (inner_w, inner_h), (0, 0, 0, 0))
-    screen_clipped.paste(screen_rgba, (0, 0), screen_mask)
-
-    bezel.paste(screen_clipped, (bezel_pad, bezel_pad), screen_clipped)
-
-    # ── 4. Dynamic Island pill — black, centered at top of inner screen ──
-    di_w = round(inner_w * 0.27)
-    di_h = round(di_w * 0.265)
-    di_x = (phone_w - di_w) // 2
-    di_y = bezel_pad + 32
-    di_draw = ImageDraw.Draw(bezel)
-    di_draw.rounded_rectangle(
-        (di_x, di_y, di_x + di_w, di_y + di_h),
-        radius=di_h // 2,
-        fill=(0, 0, 0, 255),
+    ImageDraw.Draw(screen_mask).rounded_rectangle(
+        (0, 0, inner_w - 1, inner_h - 1), radius=inner_radius, fill=255,
     )
+    bezel.paste(src_resized, (bezel_pad, bezel_pad), screen_mask)
 
-    # ── 5. Gold edge sheen (top-left highlight, bottom-right rim) ──────────
+    # NOTE: no fake dynamic-island overlay. The source already represents
+    # the real device's screen content — drawing a black pill on top covers
+    # legitimate UI elements (e.g. the home-screen XP pill on Main Menu
+    # which renders in the safe area beneath the OS DI cutout).
+
+    # ── 4. Gold edge sheen (top-left highlight, bottom-right rim) ──────────
     sheen = Image.new('RGBA', (phone_w, phone_h), (0, 0, 0, 0))
     sd = ImageDraw.Draw(sheen)
     sd.rounded_rectangle((0, 0, phone_w - 1, phone_h - 1), radius=outer_radius,
