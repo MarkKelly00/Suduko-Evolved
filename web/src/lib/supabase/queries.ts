@@ -97,6 +97,46 @@ export async function getGlobalLeaderboard(
 }
 
 /**
+ * Campaign level IDs covered by the website's leaderboard sub-selector.
+ * Must match the iOS app's `levelId(index)` format (see
+ * src/game/content/levels.ts:46-48). Currently only L1–L5 to mirror the
+ * iOS Leaderboard screen's pill set; trivial to extend to all 30 by
+ * appending more entries.
+ */
+export const CAMPAIGN_LEVEL_IDS = [
+  'world1-level-1',
+  'world1-level-2',
+  'world1-level-3',
+  'world1-level-4',
+  'world1-level-5',
+] as const;
+export type CampaignLevelId = (typeof CAMPAIGN_LEVEL_IDS)[number];
+
+/**
+ * Fetch global leaderboards for all five campaign levels in parallel.
+ * Returns a map keyed by level id. Bundle is small enough (5×25 rows of
+ * tiny JSON) that we send all of it on the initial render and let the
+ * client switch between levels instantly with no extra fetches.
+ */
+export async function getGlobalLeaderboardsByLevel(
+  limit = 25,
+): Promise<Record<CampaignLevelId, LeaderboardRow[]>> {
+  const empty = Object.fromEntries(
+    CAMPAIGN_LEVEL_IDS.map((id) => [id, [] as LeaderboardRow[]]),
+  ) as Record<CampaignLevelId, LeaderboardRow[]>;
+
+  const supabase = getServerSupabase();
+  if (!supabase) return empty;
+
+  const results = await Promise.all(
+    CAMPAIGN_LEVEL_IDS.map((id) => getGlobalLeaderboard(id, limit)),
+  );
+  return Object.fromEntries(
+    CAMPAIGN_LEVEL_IDS.map((id, i) => [id, results[i] ?? []]),
+  ) as Record<CampaignLevelId, LeaderboardRow[]>;
+}
+
+/**
  * Time-trial leaderboard for a given mode (e.g. 'sprint_3min').
  * period_key '' means all-time.
  */

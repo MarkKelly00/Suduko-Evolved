@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { CrownBadge } from '@/components/ui/CrownBadge';
 import { StarRating } from '@/components/ui/StarRating';
 import type { LeaderboardRow as Row } from '@/lib/supabase/types';
@@ -27,6 +28,39 @@ export function LeaderboardRow({ row, showStars = false, showTime = true }: Prop
         : 'rgba(180,120,80,0.12)';
   const podiumText = row.rank === 1 ? '#F5D58A' : '#ECEFF7';
 
+  // Click target: name + handle wrap into a <Link> to /u/<username> when
+  // the username is present. Anonymous rows (no username) stay as plain
+  // text. Hover state tints the display name gold to signal the affordance.
+  const nameBlock = (
+    <div className="min-w-0">
+      <p
+        className={`truncate text-sm font-semibold text-[var(--color-text)] ${
+          row.username
+            ? 'transition-colors group-hover:text-[var(--color-gold-glow)]'
+            : ''
+        }`}
+      >
+        {name}
+      </p>
+      {row.username && row.display_name && (
+        <p className="truncate text-[0.7rem] uppercase tracking-[0.15em] text-[var(--color-text-dim)]">
+          @{row.username}
+        </p>
+      )}
+    </div>
+  );
+  const wrappedName = row.username ? (
+    <Link
+      href={`/u/${row.username}`}
+      className="group min-w-0 outline-none"
+      aria-label={`View ${name}'s profile`}
+    >
+      {nameBlock}
+    </Link>
+  ) : (
+    nameBlock
+  );
+
   return (
     <div className="flex items-center justify-between gap-3 rounded-xl border border-[var(--color-glass-border)] bg-[var(--color-surface)] px-3 py-2.5">
       <div className="flex min-w-0 items-center gap-3">
@@ -40,16 +74,7 @@ export function LeaderboardRow({ row, showStars = false, showTime = true }: Prop
         >
           {row.rank}
         </span>
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-[var(--color-text)]">
-            {name}
-          </p>
-          {row.username && row.display_name && (
-            <p className="truncate text-[0.7rem] uppercase tracking-[0.15em] text-[var(--color-text-dim)]">
-              @{row.username}
-            </p>
-          )}
-        </div>
+        {wrappedName}
       </div>
       <div className="flex flex-shrink-0 items-center gap-3">
         {showStars && row.stars !== undefined && (

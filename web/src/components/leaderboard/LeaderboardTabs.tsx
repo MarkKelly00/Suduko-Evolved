@@ -5,12 +5,17 @@ import { LeaderboardRow } from './LeaderboardRow';
 import { LeaderboardEmpty } from './LeaderboardEmpty';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { cn } from '@/lib/utils';
+import {
+  CAMPAIGN_LEVEL_IDS,
+  type CampaignLevelId,
+} from '@/lib/supabase/queries';
 import type { LeaderboardRow as Row } from '@/lib/supabase/types';
 
 type TabKey = 'global' | 'sprint' | 'duels' | 'friends';
 
 interface LeaderboardTabsProps {
-  global: Row[];
+  /** L1–L5 leaderboards keyed by campaign level id. */
+  globalsByLevel: Record<CampaignLevelId, Row[]>;
   sprint: Row[];
   configured: boolean;
 }
@@ -22,8 +27,22 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: 'friends', label: 'Friends' },
 ];
 
-export function LeaderboardTabs({ global, sprint, configured }: LeaderboardTabsProps) {
+/** Pill labels for the L1–L5 sub-selector — matches the iOS Leaderboard
+ *  screen which renders these as `id.replace('world1-level-', 'L')`. */
+const LEVEL_PILLS = CAMPAIGN_LEVEL_IDS.map((id) => ({
+  id,
+  label: id.replace('world1-level-', 'L'),
+}));
+
+export function LeaderboardTabs({
+  globalsByLevel,
+  sprint,
+  configured,
+}: LeaderboardTabsProps) {
   const [active, setActive] = useState<TabKey>('global');
+  const [activeLevel, setActiveLevel] = useState<CampaignLevelId>(
+    'world1-level-1',
+  );
 
   const renderRows = (rows: Row[], opts: { showStars?: boolean }) => {
     if (rows.length === 0) {
@@ -70,8 +89,32 @@ export function LeaderboardTabs({ global, sprint, configured }: LeaderboardTabsP
 
       {configured && active === 'global' && (
         <GlassCard padding="md" className="!rounded-3xl">
-          <p className="section-eyebrow mb-4">Global · Logic Garden, Level 1</p>
-          {renderRows(global, { showStars: true })}
+          {/* L1–L5 sub-selector — mirrors the iOS Leaderboard screen.
+              All five leaderboards were fetched server-side, so switching
+              between levels is instant with no extra round-trips. */}
+          <div className="mb-4 flex flex-wrap gap-2">
+            {LEVEL_PILLS.map((lvl) => (
+              <button
+                key={lvl.id}
+                type="button"
+                onClick={() => setActiveLevel(lvl.id)}
+                className={cn(
+                  'rounded-full px-3 py-1.5 text-xs font-bold tabular-nums transition-all duration-[var(--motion-fast)]',
+                  activeLevel === lvl.id
+                    ? 'bg-[rgba(224,185,106,0.18)] text-[var(--color-gold-glow)] ring-1 ring-[rgba(224,185,106,0.5)]'
+                    : 'bg-[rgba(31,42,68,0.6)] text-[var(--color-text-muted)] ring-1 ring-[var(--color-glass-border)] hover:text-[var(--color-text)]',
+                )}
+                aria-pressed={activeLevel === lvl.id}
+              >
+                {lvl.label}
+              </button>
+            ))}
+          </div>
+          <p className="section-eyebrow mb-4">
+            Global · Logic Garden, Level{' '}
+            {activeLevel.replace('world1-level-', '')}
+          </p>
+          {renderRows(globalsByLevel[activeLevel] ?? [], { showStars: true })}
         </GlassCard>
       )}
 

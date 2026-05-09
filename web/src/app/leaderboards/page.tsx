@@ -5,10 +5,13 @@ import { SectionEyebrow } from '@/components/ui/SectionEyebrow';
 import { SiteHeader } from '@/components/marketing/SiteHeader';
 import { SiteFooter } from '@/components/marketing/SiteFooter';
 import {
-  getGlobalLeaderboard,
+  CAMPAIGN_LEVEL_IDS,
+  getGlobalLeaderboardsByLevel,
   getTimeTrialLeaderboard,
+  type CampaignLevelId,
 } from '@/lib/supabase/queries';
 import { isSupabaseConfigured } from '@/lib/supabase/server';
+import type { LeaderboardRow } from '@/lib/supabase/types';
 
 export const revalidate = 60;
 
@@ -18,14 +21,22 @@ export const metadata: Metadata = {
     'Top Sudoku Evolved solvers, ranked. Global, 3-Minute Sprint, Duels, Friends.',
 };
 
+const EMPTY_GLOBALS = CAMPAIGN_LEVEL_IDS.reduce(
+  (acc, id) => {
+    acc[id] = [];
+    return acc;
+  },
+  {} as Record<CampaignLevelId, LeaderboardRow[]>,
+);
+
 export default async function LeaderboardsPage() {
   const configured = isSupabaseConfigured();
-  const [global, sprint] = configured
+  const [globalsByLevel, sprint] = configured
     ? await Promise.all([
-        getGlobalLeaderboard('world1-level-1', 25),
+        getGlobalLeaderboardsByLevel(25),
         getTimeTrialLeaderboard('sprint_3min', '', 25),
       ])
-    : [[], []];
+    : [EMPTY_GLOBALS, [] as LeaderboardRow[]];
 
   return (
     <>
@@ -45,7 +56,7 @@ export default async function LeaderboardsPage() {
 
           <div className="mt-10">
             <LeaderboardTabs
-              global={global}
+              globalsByLevel={globalsByLevel}
               sprint={sprint}
               configured={configured}
             />
