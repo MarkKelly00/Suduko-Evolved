@@ -14,6 +14,12 @@ export const SCORING = {
   STREAK_STEP: 5,
   STREAK_INCREMENT: 0.1,
   STREAK_MAX_MULT: 2.0,
+  /** Compounding per-mistake multiplier. 0 mistakes → ×1.0, 1 → ×0.90,
+   *  2 → ×0.81, 3 → ×0.729, 5 → ~×0.59. Applied AFTER the no-mistake
+   *  flat bonus is computed (a clean run gets BOTH the +200 bonus and
+   *  the multiplier left at 1.0). The streak multiplier still applies
+   *  on top — the order is: subtotal → mistake mult → streak mult. */
+  MISTAKE_PENALTY_MULTIPLIER: 0.9,
 } as const;
 
 export interface ScoreInput {
@@ -69,7 +75,18 @@ export function calculateScore(input: ScoreInput): ScoreBreakdown {
     noMistakeBonus +
     noHintBonus +
     timeBonus;
-  const total = Math.round(subtotal * streakMultiplier);
+  // Compounding per-mistake penalty. Each mistake multiplies the score
+  // by 0.9 (default), so the cost grows non-linearly: 1 mistake costs
+  // 10%, 2 cost 19%, 3 cost 27.1%, 5 cost ~41%. The flat
+  // NO_MISTAKE_BONUS (already +0 above when mistakes>0) is the binary
+  // "clean run" reward; this multiplier punishes the magnitude. Applied
+  // BEFORE the streak multiplier so a hot streak doesn't paper over a
+  // sloppy run.
+  const mistakeMultiplier = Math.pow(
+    SCORING.MISTAKE_PENALTY_MULTIPLIER,
+    Math.max(0, mistakes),
+  );
+  const total = Math.round(subtotal * mistakeMultiplier * streakMultiplier);
 
   return {
     base,
@@ -81,6 +98,7 @@ export function calculateScore(input: ScoreInput): ScoreBreakdown {
     noMistakeBonus,
     noHintBonus,
     timeBonus,
+    mistakeMultiplier,
     streakMultiplier,
     total,
   };

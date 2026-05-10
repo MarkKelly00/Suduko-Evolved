@@ -33,8 +33,22 @@ interface ProgressActions {
   /** Mark the one-time first-launch tutorial modal as Begun or Skipped.
    *  After this is called once, the modal never shows again on this device. */
   markTutorialSeen: () => void;
+  /** Apply a cloud-fetched snapshot to the local progress store via
+   *  best-of-best merge semantics. Used by `runCloudToLocalSync()`
+   *  after a user authenticates so they see their cloud-stored
+   *  progress on the current device. Local data — if any — is kept
+   *  when it strictly beats the cloud entry; otherwise cloud wins.
+   *  Also re-derives `unlockedLevels` so the saga map opens the
+   *  expected next level after restore. */
+  restoreFromCloud: (snapshot: CloudProgressSnapshot) => void;
   hydrate: () => void;
   reset: () => void;
+}
+
+export interface CloudProgressSnapshot {
+  levels: Record<string, ProgressLevelEntry>;
+  timeTrialBests: Record<string, TimeTrialBest>;
+  totalXP: number;
 }
 
 export type ProgressState = ProgressStoreV1 & ProgressActions & {
@@ -123,6 +137,67 @@ export const useProgressStore = create<ProgressState>((set, get) => ({
   markTutorialSeen: () => {
     if (get().hasSeenTutorial) return;
     const next: ProgressStoreV1 = { ...progressSlice(get()), hasSeenTutorial: true };
+    set(next);
+    persist(next);
+  },
+  restoreFromCloud: (snapshot) => {
+    const state = get();
+
+    // 1. Per-level merge — keep the better of local and cloud per ID.
+    const mergedLevels: Record<string, ProgressLevelEntry> = { ...state.levels };
+    for (const [levelId, cloudEntry] of Object.entries(snapshot.levels)) {
+      mergedLevels[levelId] = mergeBest(
+        state.levels[levelId],
+        {
+          stars: cloudEntry.stars,
+          crown: cloudEntry.crown,
+          bestScore: cloudEntry.bestScore,
+          bestTime: cloudEntry.bestTime,
+        },
+        cloudEntry.completedAt,
+      );
+    }
+
+    // 2. Per-mode time-trial merge — keep higher score; same score
+    // tiebreak on lower time.
+    const mergedTtBests: Record<string, TimeTrialBest> = { ...state.timeTrialBests };
+    for (const [modeId, cloudBest] of Object.entries(snapshot.timeTrialBests)) {
+      const localBest = state.timeTrialBests[modeId];
+      const cloudBeats =
+        !localBest ||
+        cloudBest.score > localBest.score ||
+        (cloudBest.score === localBest.score && cloudBest.time < localBest.time);
+      if (cloudBeats) mergedTtBests[modeId] = cloudBest;
+    }
+
+    // 3. Re-derive completedLevelIds + unlockedLevels from the merged
+    // level set so the Saga Map opens the right next level after
+    // restore. Each completed level unlocks itself + the next level
+    // in the same world (capped at world's last index).
+    const completedLevelIds = Array.from(
+      new Set([...state.completedLevelIds, ...Object.keys(mergedLevels)]),
+    );
+    const unlockedSet = new Set(state.unlockedLevels);
+    for (const levelId of completedLevelIds) {
+      unlockedSet.add(levelId);
+      const match = /^world1-level-(\d+)$/.exec(levelId);
+      if (match) {
+        const next = parseInt(match[1]!, 10) + 1;
+        if (next >= 1 && next <= 30) unlockedSet.add(`world1-level-${next}`);
+      }
+    }
+
+    // 4. XP — take max(local, cloud) so guest XP can never regress.
+    const totalXP = Math.max(state.totalXP, Math.max(0, snapshot.totalXP));
+
+    const next: ProgressStoreV1 = {
+      ...progressSlice(state),
+      levels: mergedLevels,
+      timeTrialBests: mergedTtBests,
+      completedLevelIds,
+      unlockedLevels: Array.from(unlockedSet),
+      totalXP,
+    };
     set(next);
     persist(next);
   },

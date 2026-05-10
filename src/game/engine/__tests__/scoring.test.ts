@@ -27,8 +27,9 @@ describe('calculateScore', () => {
     // noHintBonus = 150
     // timeBonus = (360 - 200) * 2 = 320
     // subtotal = 500 + 450 + 450 + 675 + 900 + 300 + 200 + 150 + 320 = 3945
+    // mistakeMultiplier = 0.9^0 = 1.0 (clean run)
     // streakSteps = floor(50/5) = 10 → multiplier = min(2.0, 1 + 0.1*10) = 2.0
-    // total = round(3945 * 2.0) = 7890
+    // total = round(3945 * 1.0 * 2.0) = 7890
     expect(breakdown.base).toBe(500);
     expect(breakdown.rowBonus).toBe(450);
     expect(breakdown.colBonus).toBe(450);
@@ -38,11 +39,12 @@ describe('calculateScore', () => {
     expect(breakdown.noMistakeBonus).toBe(SCORING.NO_MISTAKE_BONUS);
     expect(breakdown.noHintBonus).toBe(SCORING.NO_HINT_BONUS);
     expect(breakdown.timeBonus).toBe(320);
+    expect(breakdown.mistakeMultiplier).toBe(1.0);
     expect(breakdown.streakMultiplier).toBe(2.0);
     expect(breakdown.total).toBe(7890);
   });
 
-  test('mistakes-only run zeroes the no-mistake bonus and resets streak multiplier toward 1.0', () => {
+  test('mistakes-only run zeroes the no-mistake bonus AND applies compounding multiplier', () => {
     const breakdown = calculateScore({
       correctPlacements: 50,
       tallies: {
@@ -62,6 +64,35 @@ describe('calculateScore', () => {
     expect(breakdown.noHintBonus).toBe(SCORING.NO_HINT_BONUS);
     expect(breakdown.timeBonus).toBe(0); // ran over target
     expect(breakdown.streakMultiplier).toBe(1.0);
+    // 3 mistakes → 0.9^3 = 0.729 (compounding penalty).
+    expect(breakdown.mistakeMultiplier).toBeCloseTo(0.729, 5);
+    // total should be smaller than the equivalent clean-run subtotal.
+    // base 500 + bonuses 450+450+675+900+200(combo) + 150 nohint + 0
+    // timebonus + 0 nomistake = 3325; ×0.729 ×1.0 = ~2424
+    expect(breakdown.total).toBe(Math.round(3325 * 0.729));
+  });
+
+  test('compounding multiplier scales linearly with mistake count', () => {
+    const baseInput = {
+      correctPlacements: 50,
+      tallies: {
+        rowsCompleted: 0,
+        colsCompleted: 0,
+        boxesCompleted: 0,
+        numberSetsCompleted: 0,
+        comboCount: 0,
+      },
+      hintsUsed: 1, // disable nohint so noMistakeBonus is the only mistake-tied bonus
+      elapsedSeconds: 100,
+      targetTimeSeconds: 100,
+      streak: 0,
+    };
+    const m0 = calculateScore({ ...baseInput, mistakes: 0 });
+    const m1 = calculateScore({ ...baseInput, mistakes: 1 });
+    const m2 = calculateScore({ ...baseInput, mistakes: 2 });
+    expect(m0.mistakeMultiplier).toBe(1.0);
+    expect(m1.mistakeMultiplier).toBeCloseTo(0.9, 5);
+    expect(m2.mistakeMultiplier).toBeCloseTo(0.81, 5);
   });
 
   test('hints-only run zeroes the no-hint bonus', () => {

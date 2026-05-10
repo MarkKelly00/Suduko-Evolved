@@ -16,6 +16,7 @@ import { gameCenterService } from '@/services/gameCenter';
 import { authService, isSupabaseConfigured } from '@/services/supabase';
 import { drainPendingSubmissions } from '@/game/sync/pendingSubmissionsQueue';
 import { runLocalToCloudSync } from '@/game/sync/localToCloudSync';
+import { runCloudToLocalSync } from '@/game/sync/cloudToLocalSync';
 import { RootNavigator } from '@/app/navigation/RootNavigator';
 import { colors } from '@/theme';
 
@@ -79,8 +80,15 @@ export default function App() {
             if (__DEV__) console.warn('[App] ensureProfile failed', err);
           }
           auth.setStatus('authenticated');
-          // Run local→cloud sync + drain queue once we're signed in.
-          void runLocalToCloudSync(session.user.id);
+          // Sync. Order matters: localToCloud first (uploads any local
+          // bests that beat cloud — handles the guest-migration path
+          // for first-time sign-ins), then cloudToLocal (downloads
+          // every other user's data and merges, ensuring we never
+          // miss cross-device wins).
+          void (async () => {
+            await runLocalToCloudSync(session.user.id);
+            await runCloudToLocalSync(session.user.id);
+          })();
         } else {
           auth.setStatus('guest');
         }
@@ -101,7 +109,14 @@ export default function App() {
     unsubscribe = authService.onAuthStateChange((event, session) => {
       const current = useAuthStore.getState();
       if (event === 'SIGNED_OUT') {
+        // Wipe both auth state AND local progress on sign-out so the
+        // next user (whether the same account on a different session
+        // or a different account entirely) starts with a clean local
+        // store and gets their own data restored from cloud on the
+        // next sign-in. Without this wipe, user A's level scores leak
+        // into user B's account when B signs in on the same device.
         current.resetToGuest();
+        useProgressStore.getState().reset();
         return;
       }
       if (session?.user) {
@@ -127,9 +142,16 @@ export default function App() {
           })();
         }, 0);
         if (!wasAuthenticated) {
-          // Sync runs its own queries; defer for the same reason.
+          // Sync. Same ordering rule as the bootstrap path:
+          // localToCloud first (guest migration on first sign-in),
+          // then cloudToLocal (download user's bests). Deferred via
+          // setTimeout so supabase-js can finish its setSession
+          // bookkeeping before we issue the queries.
           setTimeout(() => {
-            void runLocalToCloudSync(session.user.id);
+            void (async () => {
+              await runLocalToCloudSync(session.user.id);
+              await runCloudToLocalSync(session.user.id);
+            })();
           }, 0);
         }
       }

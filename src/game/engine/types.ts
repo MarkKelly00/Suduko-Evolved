@@ -87,6 +87,10 @@ export interface ScoreBreakdown {
   noMistakeBonus: number;
   noHintBonus: number;
   timeBonus: number;
+  /** Compounding per-mistake multiplier. 1.0 on a clean run, 0.9^N for
+   *  N mistakes. Applied AFTER the bonuses are summed but BEFORE the
+   *  streak multiplier — see calculateScore for ordering. */
+  mistakeMultiplier: number;
   streakMultiplier: number;
   total: number;
 }
