@@ -72,8 +72,15 @@ export function OpenInAppButton({
       onClick={onClick}
       className={cn(className)}
     >
-      {label}
-      <ArrowRight className="h-4 w-4" />
+      {/* Inner inline-flex span — defensive guarantee that the label and
+          arrow always sit on a single line. PremiumButton's baseClass
+          already includes `whitespace-nowrap`, but this nesting keeps
+          the layout intact even if a parent stylesheet (or a stale
+          deployment) overrides those classes on the anchor. */}
+      <span className="inline-flex items-center justify-center gap-2 whitespace-nowrap">
+        {label}
+        <ArrowRight className="h-4 w-4 shrink-0" />
+      </span>
     </PremiumButton>
   );
 }

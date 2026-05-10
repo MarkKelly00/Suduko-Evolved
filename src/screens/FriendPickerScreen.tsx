@@ -165,10 +165,14 @@ function CloseHeader({ onClose }: { onClose: () => void }) {
         onPress={onClose}
         accessibilityRole="button"
         accessibilityLabel="Close"
-        style={styles.closeBtn}
+        style={({ pressed }) => [styles.closeBtn, pressed && styles.closeBtnPressed]}
         hitSlop={12}
       >
-        <Text style={styles.closeText}></Text>
+        {/* Plain `×` glyph — the codebase doesn't pull in an icon font;
+            this matches the convention used by TopBar's presentation
+            ='modal' close and the LevelPreviewModal CloseButton so every
+            modal-context close affordance reads the same. */}
+        <Text style={styles.closeText}>{'×'}</Text>
       </Pressable>
     </View>
   );
@@ -191,10 +195,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  closeBtnPressed: { opacity: 0.7 },
   closeText: {
     color: colors.text,
-    fontSize: fontSize.md,
+    fontSize: fontSize.xl,
     fontWeight: fontWeight.semibold,
+    // The `×` glyph sits a touch low in its em-box; nudge it up so it
+    // reads as visually centered in the circle. Matches the offset used
+    // in TopBar's modal-close style.
+    marginTop: -3,
   },
   body: {
     flex: 1,
