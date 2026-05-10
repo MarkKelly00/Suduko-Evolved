@@ -25,6 +25,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -145,13 +146,26 @@ export function LevelPreviewModal({
       statusBarTranslucent
       onRequestClose={onClose}
     >
-      <View style={styles.scrim}>
+      {/* The scrim is itself a Pressable so taps on the dimmed area
+          outside the card dismiss the modal — standard iOS pattern.
+          The card swallows its own touches via onStartShouldSetResponder
+          so taps inside the card don't propagate to the scrim. */}
+      <Pressable
+        style={styles.scrim}
+        onPress={onClose}
+        accessibilityLabel="Close preview"
+      >
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           bounces={false}
         >
-          <View style={styles.card}>
+          <View
+            style={styles.card}
+            onStartShouldSetResponder={() => true}
+            onResponderTerminationRequest={() => false}
+          >
+            <CloseButton onPress={onClose} />
             {isLocked ? (
               <LockedBody preview={preview} onClose={onClose} />
             ) : (
@@ -165,8 +179,31 @@ export function LevelPreviewModal({
             )}
           </View>
         </ScrollView>
-      </View>
+      </Pressable>
     </Modal>
+  );
+}
+
+// ─── Close button ──────────────────────────────────────────────────────────
+//
+// Anchored top-right of the card so the player has an unmissable way to
+// dismiss the preview. Glyph is a plain `×` (Unicode U+00D7) styled large
+// — the codebase doesn't pull in any icon fonts; this matches the existing
+// text-based glyph convention used elsewhere (e.g. TopBar's `‹` chevron).
+function CloseButton({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Close"
+      onPress={onPress}
+      hitSlop={12}
+      style={({ pressed }) => [
+        styles.closeButton,
+        pressed && styles.closeButtonPressed,
+      ]}
+    >
+      <Text style={styles.closeIcon}>{'×'}</Text>
+    </Pressable>
   );
 }
 
@@ -334,7 +371,32 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: radius.xl,
     padding: spacing.xl,
+    // Extra top padding leaves room for the absolutely-positioned
+    // CloseButton in the top-right corner without crowding the LEVEL N
+    // eyebrow underneath it.
+    paddingTop: spacing.xl + spacing.base,
     gap: spacing.sm,
+  },
+  closeButton: {
+    position: 'absolute',
+    top: spacing.sm,
+    right: spacing.sm,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(11,18,32,0.72)',
+    borderWidth: 1,
+    borderColor: colors.glassBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+  },
+  closeButtonPressed: { opacity: 0.7 },
+  closeIcon: {
+    color: colors.text,
+    fontSize: fontSize.xl,
+    fontWeight: fontWeight.semibold,
+    marginTop: -2,
   },
   header: {
     alignItems: 'center',

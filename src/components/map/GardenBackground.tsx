@@ -27,6 +27,7 @@ import {
 } from 'react-native-reanimated';
 import { colors } from '@/theme';
 import {
+  WORLD_1_ACTS,
   WORLD_1_NODE_LAYOUT,
   getWorldActForLevel,
   isActFinaleLevel,
@@ -66,6 +67,15 @@ interface ActAura {
   tint: string;
 }
 
+interface ActWash {
+  cx: number;
+  cy: number;
+  radius: number;
+  /** Solid (alpha=1) act primary — visibility is controlled via Circle
+   *  opacity in the render layer, not the colour itself. */
+  tint: string;
+}
+
 function clusterCenter(cluster: MapNodeLayout[], width: number): { x: number; y: number } {
   const xs = cluster.map((n) => n.x * width);
   const ys = cluster.map((n) => n.y);
@@ -86,21 +96,23 @@ function clusterRadius(cluster: MapNodeLayout[], width: number): number {
   return Math.max(220, maxDist + 140);
 }
 
-/** Pick a tint per biome for subtle visual variety. */
+/** Pick a tint per biome — punchier than the original 0.10–0.12 alphas
+ *  so each biome reads as a clearly distinct zone rather than a near-
+ *  invisible variation on the navy backdrop. */
 function tintForBiome(biome: MapNodeLayout['biome']): string {
   switch (biome) {
     case 'seed-gate':
-      return 'rgba(91, 214, 168, 0.12)';
+      return 'rgba(91, 214, 168, 0.26)';
     case 'moon-vine':
-      return 'rgba(126, 200, 220, 0.12)';
+      return 'rgba(126, 200, 220, 0.26)';
     case 'crystal-bed':
-      return 'rgba(157, 123, 255, 0.10)';
+      return 'rgba(157, 123, 255, 0.24)';
     case 'logic-stream':
-      return 'rgba(0, 229, 204, 0.10)';
+      return 'rgba(0, 229, 204, 0.24)';
     case 'bloom-arch':
-      return 'rgba(245, 213, 138, 0.10)';
+      return 'rgba(245, 213, 138, 0.24)';
     case 'oracle-grove':
-      return 'rgba(123, 167, 242, 0.10)';
+      return 'rgba(123, 167, 242, 0.24)';
   }
 }
 
@@ -132,6 +144,30 @@ function buildTerrainBlobs(width: number): TerrainBlob[] {
   return blobs;
 }
 
+/** Build one huge soft wash per act, anchored at the act's vertical
+ *  midpoint and sized to bleed past its bounds so adjacent acts cross-
+ *  fade naturally as the user scrolls. Renders BEHIND every other
+ *  layer so the eye reads "I'm in the green zone / blue zone / gold
+ *  zone" before the detail layers register. Uses `act.primary` (full
+ *  saturation) and lets the render-time Circle opacity dial back the
+ *  intensity — that gives a consistent biome read across the three
+ *  acts without depending on the pre-baked low-alpha `act.wash` field
+ *  (which is too subtle to register through the navy backdrop). */
+function buildActWashes(width: number): ActWash[] {
+  return WORLD_1_ACTS.map((act) => {
+    const fromY =
+      WORLD_1_NODE_LAYOUT.find((n) => n.level === act.fromLevel)?.y ?? 0;
+    const toY =
+      WORLD_1_NODE_LAYOUT.find((n) => n.level === act.toLevel)?.y ?? fromY;
+    const cy = (fromY + toY) / 2;
+    // Span generously past the act's vertical extent so neighbouring
+    // washes overlap and produce a smooth biome→biome transition rather
+    // than a hard edge at the act boundary.
+    const span = Math.max(800, toY - fromY + 600);
+    return { cx: width / 2, cy, radius: span, tint: act.primary };
+  });
+}
+
 /** Build a small set of "act-finale" auras anchored on level 10/20/30 so
  *  each act ends with a destination that radiates further than a normal
  *  cluster blob. These render BEHIND the cluster blobs. */
@@ -153,6 +189,7 @@ function buildActAuras(width: number): ActAura[] {
 export function GardenBackground({ width, height, scrollY }: Props) {
   const blobs = useMemo(() => buildTerrainBlobs(width), [width]);
   const auras = useMemo(() => buildActAuras(width), [width]);
+  const washes = useMemo(() => buildActWashes(width), [width]);
   // World content translates by -scrollY so terrain stays anchored to
   // the same world-y coordinates as the level nodes (which scroll 1:1
   // inside the ScrollView).
@@ -170,6 +207,26 @@ export function GardenBackground({ width, height, scrollY }: Props) {
     >
       <Canvas style={[styles.fill, { width, height }]}>
         <Group transform={transform}>
+          {/* Per-act biome washes — large soft radial gradients that dye
+              the entire backdrop for each act. Drawn FIRST so every
+              other layer sits on top of them. Opacity 0.18 with
+              act.primary at full saturation gives a clearly readable
+              biome change as the player scrolls. */}
+          {washes.map((w, i) => (
+            <Circle
+              key={`wash-${i}`}
+              cx={w.cx}
+              cy={w.cy}
+              r={w.radius}
+              opacity={0.18}
+            >
+              <RadialGradient
+                c={vec(w.cx, w.cy)}
+                r={w.radius}
+                colors={[w.tint, 'rgba(0,0,0,0)']}
+              />
+            </Circle>
+          ))}
           {/* Act-finale auras — soft wide washes behind levels 10/20/30
               so each act visibly culminates in a destination. */}
           {auras.map((a, i) => (
@@ -212,7 +269,7 @@ export function GardenBackground({ width, height, scrollY }: Props) {
                 cx={b.cx}
                 cy={b.cy - b.rimRadius * 0.05}
                 r={b.rimRadius}
-                opacity={0.14 + b.intensity * 0.12}
+                opacity={0.22 + b.intensity * 0.18}
               >
                 <RadialGradient
                   c={vec(b.cx, b.cy - b.rimRadius * 0.55)}

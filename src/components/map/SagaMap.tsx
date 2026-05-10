@@ -399,7 +399,7 @@ export function SagaMap({ onSelectLevel }: Props) {
         <Text style={styles.backIcon}>{'‹'}</Text>
       </Pressable>
 
-      <ActProgressHeader scrollY={scrollY} top={insets.top + spacing.sm} />
+      <ActProgressHeader scrollY={scrollY} bottom={insets.bottom + spacing.sm} />
 
       <LevelPreviewModal
         levelIndex={previewLevelIndex}

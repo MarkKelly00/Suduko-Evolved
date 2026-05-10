@@ -10,27 +10,41 @@ interface Props {
   rightSlot?: ReactNode;
   /** Override the back navigation behaviour (e.g. confirm dialog). */
   onBack?: () => void;
+  /** Visual presentation. `'modal'` swaps the back-chevron for an `×`
+   *  close glyph, which is the iOS Human Interface Guidelines pattern
+   *  for modally-presented screens. Behaviour is unchanged — the button
+   *  still calls `onBack` (or `navigation.goBack()` by default). */
+  presentation?: 'push' | 'modal';
 }
 
-export function TopBar({ title, showBack = true, rightSlot, onBack }: Props) {
+export function TopBar({
+  title,
+  showBack = true,
+  rightSlot,
+  onBack,
+  presentation = 'push',
+}: Props) {
   const navigation = useNavigation();
   const handleBack = () => {
     hapticsService.selection();
     if (onBack) onBack();
     else if (navigation.canGoBack()) navigation.goBack();
   };
+  const isModal = presentation === 'modal';
   return (
     <View style={styles.container}>
       <View style={styles.side}>
         {showBack ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Go back"
+            accessibilityLabel={isModal ? 'Close' : 'Go back'}
             onPress={handleBack}
             style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
             hitSlop={12}
           >
-            <Text style={styles.backIcon}>{'‹'}</Text>
+            <Text style={[styles.backIcon, isModal && styles.closeIcon]}>
+              {isModal ? '×' : '‹'}
+            </Text>
           </Pressable>
         ) : null}
       </View>
@@ -82,6 +96,14 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xl,
     fontWeight: fontWeight.medium,
     marginTop: -2,
+  },
+  // Overrides for the `presentation='modal'` close glyph. The `×`
+  // character has slightly different metrics from `‹` so the marginTop
+  // and weight need a nudge to keep it visually centered in the circle.
+  closeIcon: {
+    fontSize: fontSize.xl,
+    fontWeight: fontWeight.semibold,
+    marginTop: -3,
   },
   titleSlot: {
     flex: 1,

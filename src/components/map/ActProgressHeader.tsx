@@ -43,9 +43,12 @@ const ROMAN: Record<number, string> = { 1: 'I', 2: 'II', 3: 'III' };
 
 interface Props {
   scrollY: SharedValue<number>;
-  /** Pixel offset for the band's top — usually `insets.top + spacing.sm`
-   *  to clear the back button row. */
-  top: number;
+  /** Pixel offset for the band from the screen bottom — usually
+   *  `insets.bottom + spacing.sm` so the pill sits just above the home
+   *  indicator. (The pill was originally top-anchored but covered the
+   *  world-header copy at the top of the map; bottom-anchored reads
+   *  cleaner and never collides with the existing back button.) */
+  bottom: number;
 }
 
 interface ActBucket {
@@ -54,7 +57,7 @@ interface ActBucket {
   yMidpoint: number;
 }
 
-export function ActProgressHeader({ scrollY, top }: Props) {
+export function ActProgressHeader({ scrollY, bottom }: Props) {
   // Compute each act's vertical midpoint once. Used by the scroll
   // reaction to decide which act the viewport is currently inside.
   const buckets = useMemo<ActBucket[]>(() => {
@@ -111,7 +114,7 @@ export function ActProgressHeader({ scrollY, top }: Props) {
 
   return (
     <View
-      style={[styles.band, { top: top + 36 }]}
+      style={[styles.band, { bottom }]}
       pointerEvents="none"
       accessibilityRole="header"
       accessibilityLabel={`Act ${ROMAN[active.index + 1]}, ${act.title}, ${stats.cleared} of ${stats.total} cleared`}
@@ -145,9 +148,9 @@ export function ActProgressHeader({ scrollY, top }: Props) {
 const styles = StyleSheet.create({
   band: {
     position: 'absolute',
-    left: 64, // clear the back button (36w + spacing)
-    right: spacing.base,
-    alignItems: 'flex-start',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
   },
   pill: {
     backgroundColor: 'rgba(11,18,32,0.78)',

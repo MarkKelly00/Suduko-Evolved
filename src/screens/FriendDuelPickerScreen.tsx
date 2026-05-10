@@ -87,7 +87,7 @@ export default function FriendDuelPickerScreen() {
   if (loading) {
     return (
       <ScreenBackground>
-        <TopBar title="Challenge friend" />
+        <TopBar title="Challenge friend" presentation="modal" />
         <View style={styles.center}>
           <ActivityIndicator color={colors.textMuted} />
         </View>
@@ -97,7 +97,7 @@ export default function FriendDuelPickerScreen() {
 
   return (
     <ScreenBackground>
-      <TopBar title="Challenge friend" />
+      <TopBar title="Challenge friend" presentation="modal" />
       <View style={styles.body}>
         {success ? (
           <GlassCard style={styles.toast}>
