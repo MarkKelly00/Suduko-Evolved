@@ -11,6 +11,7 @@ module.exports = {
     '<rootDir>/src/game/sync/**/*.test.ts',
     '<rootDir>/src/services/persistence/**/*.test.ts',
     '<rootDir>/src/services/supabase/__tests__/username.test.ts',
+    '<rootDir>/src/services/gameCenter/__tests__/**/*.test.ts',
   ],
   testPathIgnorePatterns: ['/node_modules/', '/ios/', '/android/'],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
