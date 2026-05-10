@@ -3,15 +3,21 @@ Generate App Store iPhone 6.7" marketing screenshots from raw device captures.
 
 Pipeline (per screenshot):
   1.  Read raw JPG from ~/Downloads/Sudoku-Evolved-Screenshots.zip
-  2.  Build a 1290×2796 canvas with a navy radial gradient + faint Logic
+  2.  Build a 1284×2778 canvas with a navy radial gradient + faint Logic
       Garden grid texture + warm gold halo behind the phone
   3.  Render the brand caption block at the top (eyebrow + gold serif headline)
   4.  Composite the source screenshot into a CSS-style iPhone bezel
       (mirrors web/src/components/ui/PhoneMockup.tsx visual language)
   5.  Save as PNG to assets/app-store-screenshots/<NN-slug>.png
 
-Output is App-Store-ready: 1290×2796 PNG, sRGB, no alpha. Apple's iPhone 6.7"
-slot. Filenames are numbered for deterministic gallery ordering.
+Output is App-Store-ready: **1284×2778** PNG, sRGB, no alpha. This is the
+iPhone 6.7" Display slot in App Store Connect (iPhone 14 Plus / 13 Pro Max /
+12 Pro Max generation). The earlier output dimensions (1290×2796) were the
+6.9" slot; App Store Connect rejected the upload with "Screenshots dimensions
+should be: 1242 × 2688px, 2688 × 1242px, 1284 × 2778px or 2778 × 1284px",
+i.e. the 6.5" or 6.7" slots. We target 6.7" (the more modern of the two).
+
+Filenames are numbered for deterministic gallery ordering.
 
 Usage:
   cd /Users/markkelly/PersonalProjects/SudokuEvolved
@@ -34,7 +40,10 @@ LOOSE_DIR = Path.home() / 'Downloads'  # fallback for screens not in the zip
 OUT_DIR = ROOT / 'assets' / 'app-store-screenshots'
 
 # ─── Apple spec ─────────────────────────────────────────────────────────────
-CANVAS_W, CANVAS_H = 1290, 2796  # iPhone 6.7" slot
+# iPhone 6.7" Display slot — accepted dimensions per App Store Connect.
+# The previous 1290×2796 was the 6.9" slot which the user's submission form
+# does not currently accept (see error message in the docstring above).
+CANVAS_W, CANVAS_H = 1284, 2778
 
 # ─── Brand tokens (mirror src/theme/colors.ts) ──────────────────────────────
 NAVY = (11, 18, 32)            # #0B1220
@@ -58,7 +67,15 @@ HELVETICA_BOLD = '/System/Library/Fonts/Helvetica.ttc'
 SCREENSHOTS = [
     # ── Solo gameplay arc ──
     ('Sudoku-Evolved-Main-Menu.jpg',          'main-menu',          'Pure logic. Cinematic feel.'),
-    ('Sudoku-Evolved-Saga-Map.jpg',           'saga-map',           'Where reason blooms.'),
+    # Saga map: replaced with the new build-7 capture (post biome-wash
+    # polish, bottom-anchored act pill). Filename has an underscore between
+    # "Sudoku" and "Evolved" — that's intentional, matches the source file
+    # the user provided in ~/Downloads.
+    ('Sudoku_Evolved-Saga-Map.png',           'saga-map',           'Where reason blooms.'),
+    # Level preview / Seed Gate modal — sits right after Saga Map in the
+    # gameplay flow, sells the per-level progression mechanics (your best,
+    # friend best, global #1, star/crown targets).
+    ('Sudoku-Evolved-Level-Stats.png',        'level-stats',        'Own every level.'),
     ('Sudoku-Evolved-Time-Trial.jpg',         'time-trial',         'Race the clock.'),
     # ── Social / multiplayer arc ──
     ('Sudoku-Evolved-Online-Duel.png',        'online-duel',        'Same grid. Same clock.'),
@@ -67,9 +84,11 @@ SCREENSHOTS = [
     # ── Competition arc ──
     ('Sudoku-Evolved-Leaderboard.jpg',        'leaderboard',        'Cleanest solve wins.'),
     ('Sudoku-Evolved-Leaderboard-Global.jpg', 'leaderboard-global', 'Climb the global board.'),
-    # ── Personal / sign-in ──
+    # ── Personal ──
+    # Login dropped to stay at App Store Connect's 10-screenshot cap.
+    # Sign-in is auth chrome rather than gameplay; the other 10 sell the
+    # game itself. Re-add if you want one more storyline beat.
     ('Sudoku-Evolved-Profile.jpg',            'profile',            'Stars, crowns, and your saga.'),
-    ('Sudoku-Evolved-Login.jpg',              'login',              'Sign in. Climb the board.'),
 ]
 
 
@@ -392,7 +411,7 @@ def main() -> None:
             zip_ctx.close()
 
     print()
-    print(f'✓ Generated {len(SCREENSHOTS)} App Store screenshots at 1290×2796.')
+    print(f'✓ Generated {len(SCREENSHOTS)} App Store screenshots at {CANVAS_W}×{CANVAS_H}.')
 
 
 if __name__ == '__main__':
