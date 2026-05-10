@@ -38,6 +38,11 @@ export interface CloudSyncResult {
   ttRestored: number;
   /** Cloud XP value at sync time (after max(local, cloud) merge). */
   xpRestored: number;
+  /** Cloud streak value at sync time (after max(local, cloud) merge).
+   *  Note: as of build 12, no code path uploads streak to the cloud,
+   *  so this will be 0 for every user. The fetch is wired up defensively
+   *  for when a streak-upload path lands later. */
+  streakRestored: number;
   errors: string[];
 }
 
@@ -61,7 +66,8 @@ interface CloudTtRow {
 }
 
 interface CloudProfile {
-  total_xp: number | null;
+  xp: number | null;
+  streak: number | null;
 }
 
 export async function runCloudToLocalSync(
@@ -71,6 +77,7 @@ export async function runCloudToLocalSync(
     levelsRestored: 0,
     ttRestored: 0,
     xpRestored: 0,
+    streakRestored: 0,
     errors: [],
   };
   const supabase = getSupabase();
@@ -95,10 +102,15 @@ export async function runCloudToLocalSync(
     .eq('user_id', userId);
   if (e2) result.errors.push(`best_time_trial_scores: ${e2.message}`);
 
-  // 3. Profile XP — single row per user
+  // 3. Profile XP + streak. Column names match the actual schema in
+  // db/001_schema.sql — `xp` (not `total_xp`) and `streak`. Earlier
+  // builds queried `total_xp` which doesn't exist; the query errored
+  // silently, the value defaulted to 0, and signing back in wiped a
+  // returning user's XP. This was the bug surfaced by mako3's
+  // post-resignin profile showing 0 XP despite cloud having 2819.
   const { data: profile, error: e3 } = await supabase
     .from('profiles')
-    .select('total_xp')
+    .select('xp, streak')
     .eq('id', userId)
     .maybeSingle();
   if (e3) result.errors.push(`profile: ${e3.message}`);
@@ -135,14 +147,18 @@ export async function runCloudToLocalSync(
     result.ttRestored++;
   }
 
-  const totalXP = Math.max(0, (profile as CloudProfile | null)?.total_xp ?? 0);
+  const cloudProfile = profile as CloudProfile | null;
+  const totalXP = Math.max(0, cloudProfile?.xp ?? 0);
+  const currentStreak = Math.max(0, cloudProfile?.streak ?? 0);
   result.xpRestored = totalXP;
+  result.streakRestored = currentStreak;
 
   // 5. Apply merge to local store
   useProgressStore.getState().restoreFromCloud({
     levels,
     timeTrialBests,
     totalXP,
+    currentStreak,
   });
 
   return result;

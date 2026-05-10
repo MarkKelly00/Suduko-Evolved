@@ -49,6 +49,10 @@ export interface CloudProgressSnapshot {
   levels: Record<string, ProgressLevelEntry>;
   timeTrialBests: Record<string, TimeTrialBest>;
   totalXP: number;
+  /** Cloud-stored streak. As of build 12 this is always 0 (no code path
+   *  uploads it), but the field is wired up so that whenever a streak-
+   *  upload path is added, the restore picks it up automatically. */
+  currentStreak: number;
 }
 
 export type ProgressState = ProgressStoreV1 & ProgressActions & {
@@ -190,6 +194,16 @@ export const useProgressStore = create<ProgressState>((set, get) => ({
     // 4. XP — take max(local, cloud) so guest XP can never regress.
     const totalXP = Math.max(state.totalXP, Math.max(0, snapshot.totalXP));
 
+    // 5. Streak — take max(local, cloud). As of today nothing uploads
+    // the streak to cloud, so cloud value is 0 → effectively this
+    // preserves whatever local has. When streak upload lands later,
+    // the max-merge means returning users get their cloud-stored
+    // streak back automatically.
+    const currentStreak = Math.max(
+      state.currentStreak,
+      Math.max(0, snapshot.currentStreak),
+    );
+
     const next: ProgressStoreV1 = {
       ...progressSlice(state),
       levels: mergedLevels,
@@ -197,6 +211,7 @@ export const useProgressStore = create<ProgressState>((set, get) => ({
       completedLevelIds,
       unlockedLevels: Array.from(unlockedSet),
       totalXP,
+      currentStreak,
     };
     set(next);
     persist(next);
