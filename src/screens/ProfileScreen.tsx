@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { ScreenBackground } from '@/components/ui/ScreenBackground';
@@ -11,7 +11,13 @@ import { Avatar } from '@/components/profile/Avatar';
 import { useAuthStore } from '@/game/state/useAuthStore';
 import { useAuthGate } from '@/components/auth/AuthGate';
 import { useProgressStore } from '@/game/state/useProgressStore';
+import { useSettingsStore } from '@/game/state/useSettingsStore';
 import { WORLD_1_LEVELS } from '@/game/content/levels';
+import {
+  gameCenterService,
+  isPlatformIOS,
+  type GameCenterPlayer,
+} from '@/services/gameCenter';
 import {
   colors,
   fontFamily,
@@ -42,6 +48,37 @@ function ProfileScreen() {
   const sprintBest = timeTrialBests['sprint-3min'];
 
   const isAuthenticated = status === 'authenticated' && profile != null;
+
+  // Game Center status for the optional GC card. Only rendered on iOS
+  // when the user has opted in via Settings AND is currently signed in
+  // with Apple. Refresh on mount.
+  const gameCenterOptIn = useSettingsStore((s) => s.gameCenterOptIn);
+  const [gcPlayer, setGcPlayer] = useState<GameCenterPlayer | null>(null);
+  const [gcReady, setGcReady] = useState(false);
+  useEffect(() => {
+    if (!isPlatformIOS() || !gameCenterOptIn) {
+      setGcReady(false);
+      setGcPlayer(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const authed = await gameCenterService.isAuthenticated();
+      if (cancelled) return;
+      if (!authed) {
+        setGcReady(false);
+        setGcPlayer(null);
+        return;
+      }
+      const player = await gameCenterService.getLocalPlayer();
+      if (cancelled) return;
+      setGcPlayer(player);
+      setGcReady(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [gameCenterOptIn]);
 
   return (
     <ScreenBackground>
@@ -87,6 +124,33 @@ function ProfileScreen() {
             <Stat label="Best Time (s)" value={`${sprintBest?.time ?? 0}`} />
           </View>
         </GlassCard>
+
+        {gcReady ? (
+          <GlassCard style={styles.card}>
+            <Text style={styles.sectionTitle}>Game Center</Text>
+            {gcPlayer?.displayName ? (
+              <Text style={styles.placeholder}>
+                {`Signed in as ${gcPlayer.displayName}.`}
+              </Text>
+            ) : (
+              <Text style={styles.placeholder}>Connected.</Text>
+            )}
+            <PremiumButton
+              label="View leaderboards"
+              variant="secondary"
+              compact
+              onPress={() => void gameCenterService.showLeaderboard()}
+              style={styles.gcButton}
+            />
+            <PremiumButton
+              label="View achievements"
+              variant="secondary"
+              compact
+              onPress={() => void gameCenterService.showAchievements()}
+              style={styles.gcButton}
+            />
+          </GlassCard>
+        ) : null}
 
         {isAuthenticated ? (
           <GlassCard style={styles.card}>
@@ -237,6 +301,9 @@ const styles = StyleSheet.create({
   },
   card: {
     gap: spacing.sm,
+  },
+  gcButton: {
+    marginTop: spacing.xs,
   },
   sectionTitle: {
     color: colors.textMuted,

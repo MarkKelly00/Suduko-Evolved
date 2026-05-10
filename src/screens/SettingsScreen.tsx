@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { ScreenBackground } from '@/components/ui/ScreenBackground';
 import { TopBar } from '@/components/ui/TopBar';
@@ -7,12 +7,23 @@ import { PremiumButton } from '@/components/ui/PremiumButton';
 import { useSettingsStore } from '@/game/state/useSettingsStore';
 import { useProgressStore } from '@/game/state/useProgressStore';
 import {
+  gameCenterService,
+  isPlatformIOS,
+} from '@/services/gameCenter';
+import {
   colors,
   fontSize,
   fontWeight,
   letterSpacing,
   spacing,
 } from '@/theme';
+
+type GameCenterStatus =
+  | 'unknown'
+  | 'connected'
+  | 'not-connected'
+  | 'unavailable'
+  | 'try-again-next-launch';
 
 interface ToggleRowProps {
   label: string;
@@ -43,6 +54,79 @@ function SettingsScreen() {
   const resetAll = useSettingsStore((s) => s.resetAll);
   const progressReset = useProgressStore((s) => s.reset);
   const [confirming, setConfirming] = useState(false);
+
+  // Game Center state. The status drives the inline copy under the
+  // toggle row (Connected / Not connected / Try again next launch).
+  // Refreshed on mount + after every opt-in flip.
+  const [gcStatus, setGcStatus] = useState<GameCenterStatus>('unknown');
+
+  useEffect(() => {
+    if (!isPlatformIOS()) {
+      setGcStatus('unavailable');
+      return;
+    }
+    if (!gameCenterService.isAvailable()) {
+      setGcStatus('unavailable');
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const authed = await gameCenterService.isAuthenticated();
+      if (cancelled) return;
+      setGcStatus(authed ? 'connected' : 'not-connected');
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleToggleGameCenter = async (enabled: boolean) => {
+    settings.setGameCenterOptIn(enabled);
+    if (!enabled) {
+      // Toggling off only stops new submissions — Apple controls the
+      // actual sign-in state, so we leave the device-level auth alone.
+      return;
+    }
+    // Toggling on triggers the system sign-in sheet (Apple's UX is
+    // unsuppressible once `presentSignIn: true` is passed). On
+    // success, status flips to Connected. On dismissal, the user
+    // can't be re-prompted in this app session — surface a hint so
+    // they know to try again on next launch.
+    const result = await gameCenterService.authenticate({
+      presentSignIn: true,
+    });
+    if (result.authenticated) {
+      setGcStatus('connected');
+    } else if (result.requiresSignIn === false && result.reason === 'auth-already-attempted') {
+      setGcStatus('try-again-next-launch');
+    } else {
+      setGcStatus('not-connected');
+    }
+  };
+
+  const handleShowLeaderboards = () => {
+    void gameCenterService.showLeaderboard();
+  };
+
+  const handleShowAchievements = () => {
+    void gameCenterService.showAchievements();
+  };
+
+  const gcStatusLabel: string = (() => {
+    switch (gcStatus) {
+      case 'connected':
+        return 'Connected to Game Center';
+      case 'not-connected':
+        return 'Not signed in';
+      case 'unavailable':
+        return 'Unavailable on this device';
+      case 'try-again-next-launch':
+        return 'Sign in dismissed — try again on next launch';
+      default:
+        return 'Checking…';
+    }
+  })();
+  const gcButtonsEnabled = gcStatus === 'connected';
 
   const handleReset = () => {
     if (!confirming) {
@@ -107,6 +191,35 @@ function SettingsScreen() {
           />
         </GlassCard>
 
+        {isPlatformIOS() && gcStatus !== 'unavailable' ? (
+          <GlassCard style={styles.section}>
+            <Text style={styles.sectionTitle}>Game Center</Text>
+            <ToggleRow
+              label="Connect to Game Center"
+              description="Sync achievements and native leaderboards with your Apple ID."
+              value={settings.gameCenterOptIn}
+              onValueChange={handleToggleGameCenter}
+            />
+            <Text style={styles.gcStatus}>{gcStatusLabel}</Text>
+            <PremiumButton
+              label="Show leaderboards"
+              variant="secondary"
+              compact
+              onPress={handleShowLeaderboards}
+              disabled={!gcButtonsEnabled}
+              style={styles.gcButton}
+            />
+            <PremiumButton
+              label="Show achievements"
+              variant="secondary"
+              compact
+              onPress={handleShowAchievements}
+              disabled={!gcButtonsEnabled}
+              style={styles.gcButton}
+            />
+          </GlassCard>
+        ) : null}
+
         <GlassCard style={styles.section}>
           <Text style={styles.sectionTitle}>Developer</Text>
           <Text style={styles.rowDescription}>
@@ -167,5 +280,14 @@ const styles = StyleSheet.create({
   },
   resetButton: {
     marginTop: spacing.sm,
+  },
+  gcStatus: {
+    color: colors.textMuted,
+    fontSize: fontSize.xs,
+    marginTop: -spacing.xs,
+    paddingHorizontal: spacing.xxs,
+  },
+  gcButton: {
+    marginTop: spacing.xs,
   },
 });
