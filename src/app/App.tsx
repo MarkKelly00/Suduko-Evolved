@@ -12,6 +12,7 @@ import { useProgressStore } from '@/game/state/useProgressStore';
 import { useGameStore } from '@/game/state/useGameStore';
 import { useAuthStore } from '@/game/state/useAuthStore';
 import { audioService } from '@/services/audio/audioService';
+import { gameCenterService } from '@/services/gameCenter';
 import { authService, isSupabaseConfigured } from '@/services/supabase';
 import { drainPendingSubmissions } from '@/game/sync/pendingSubmissionsQueue';
 import { runLocalToCloudSync } from '@/game/sync/localToCloudSync';
@@ -29,6 +30,11 @@ export default function App() {
     useSettingsStore.getState().hydrate();
     useProgressStore.getState().hydrate();
     void audioService.preloadSfx();
+    // Initialize the iOS Game Center service. Always safe to call —
+    // it's a typed no-op on Android, on iOS builds without the native
+    // module compiled in, and on opt-out users (it never presents the
+    // sign-in sheet from here; only Settings opt-in does that).
+    void gameCenterService.initialize();
     setHydrated(true);
   }, []);
 

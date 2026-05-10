@@ -102,6 +102,12 @@ export interface SettingsStoreV1 {
   reducedMotion: boolean;
   highContrast: boolean;
   colorblindMode: boolean;
+  /** Apple Game Center opt-in. False by default — the user must
+   *  explicitly toggle this on in Settings before we trigger any
+   *  GameKit auth or submission. The flag persists across app restarts;
+   *  flipping it off stops new submissions but doesn't sign the player
+   *  out of Game Center (only Apple controls that). */
+  gameCenterOptIn: boolean;
 }
 
 export function defaultSettings(): SettingsStoreV1 {
@@ -112,6 +118,7 @@ export function defaultSettings(): SettingsStoreV1 {
     reducedMotion: false,
     highContrast: false,
     colorblindMode: false,
+    gameCenterOptIn: false,
   };
 }
 

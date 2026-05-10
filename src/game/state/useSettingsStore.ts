@@ -13,6 +13,11 @@ interface SettingsActions {
   setReducedMotion: (v: boolean) => void;
   setHighContrast: (v: boolean) => void;
   setColorblindMode: (v: boolean) => void;
+  /** Apple Game Center opt-in. Setting to `true` is what the Settings
+   *  toggle flow uses to trigger the system sign-in sheet via the
+   *  service layer. Setting to `false` halts new submissions but does
+   *  NOT sign the player out of Game Center (only iOS controls that). */
+  setGameCenterOptIn: (v: boolean) => void;
   toggle: (key: ToggleableKey) => void;
   /** Re-read from disk. Call once at app boot. */
   hydrate: () => void;
@@ -25,7 +30,8 @@ type ToggleableKey =
   | 'hapticsEnabled'
   | 'reducedMotion'
   | 'highContrast'
-  | 'colorblindMode';
+  | 'colorblindMode'
+  | 'gameCenterOptIn';
 
 export type SettingsState = SettingsStoreV1 & SettingsActions;
 
@@ -39,6 +45,7 @@ function persist(state: SettingsStoreV1): void {
     reducedMotion: state.reducedMotion,
     highContrast: state.highContrast,
     colorblindMode: state.colorblindMode,
+    gameCenterOptIn: state.gameCenterOptIn,
   };
   getStorage().set(STORAGE_KEYS.settings, payload);
 }
@@ -63,6 +70,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
   setColorblindMode: (v) => {
     set({ colorblindMode: v });
+    persist(get());
+  },
+  setGameCenterOptIn: (v) => {
+    set({ gameCenterOptIn: v });
     persist(get());
   },
   toggle: (key) => {
