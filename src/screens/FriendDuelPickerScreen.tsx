@@ -17,6 +17,7 @@ import { useAuthStore } from '@/game/state/useAuthStore';
 import { friendService } from '@/services/supabase';
 import { duelInviteService } from '@/services/duel';
 import { shareDuelInviteLink } from '@/services/duel/shareDuelInvite';
+import { submitFriendChallengeFired } from '@/game/leaderboards/leaderboardSubmissions';
 import {
   colors,
   fontFamily,
@@ -64,6 +65,9 @@ export default function FriendDuelPickerScreen() {
     try {
       await duelInviteService.createFriendDuel(friendId, route.params.mode);
       hapticsService.success();
+      // Game Center: FRIENDLY_CHALLENGE. Fire-and-forget — the toast
+      // and navigation happen regardless of whether GC ack'd.
+      void submitFriendChallengeFired();
       setSuccess(`Challenge sent to ${friendName}.`);
       setTimeout(() => navigation.goBack(), 700);
     } catch (err) {

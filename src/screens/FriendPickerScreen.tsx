@@ -16,6 +16,7 @@ import { FriendListItem } from '@/components/friends/FriendListItem';
 import { InlineToast } from '@/components/ui/InlineToast';
 import { useAuthStore } from '@/game/state/useAuthStore';
 import { challengeService, friendService, type Profile } from '@/services/supabase';
+import { submitFriendChallengeFired } from '@/game/leaderboards/leaderboardSubmissions';
 import {
   colors,
   fontFamily,
@@ -76,6 +77,9 @@ export default function FriendPickerScreen() {
         },
       });
       if (result) {
+        // Game Center: FRIENDLY_CHALLENGE. Fire-and-forget; the toast
+        // and navigation happen regardless of GC ack.
+        void submitFriendChallengeFired();
         setSuccess(`Challenge sent to @${friend.username ?? 'friend'}`);
         setTimeout(() => navigation.goBack(), 700);
       } else {

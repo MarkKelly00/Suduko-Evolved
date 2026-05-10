@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Share,
@@ -21,6 +21,11 @@ import {
   type DuelAttempt,
 } from '@/services/duel';
 import { friendService } from '@/services/supabase';
+import {
+  getDuelWinsCount,
+  recordDuelWin,
+  submitDuelResult,
+} from '@/game/leaderboards/leaderboardSubmissions';
 import {
   colors,
   fontFamily,
@@ -99,6 +104,30 @@ export default function DuelResultsScreen() {
   const isComplete = bundle.room.status === 'completed';
   const winnerId = bundle.room.winner_id;
   const isWinner = me != null && winnerId === me.id;
+
+  // Game Center submission. Fires once per room, the moment we observe
+  // status==='completed' AND we have our own attempt to read. The
+  // realtime subscription may re-fire `refresh()` multiple times, so
+  // the ref guard prevents double-submits on the same room. Apple's
+  // GameKit dedupe is also idempotent, so even if it slipped past
+  // we'd be OK — the ref is purely a network-saver.
+  const gcFiredRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isComplete || !me) return;
+    if (gcFiredRef.current === bundle.room.id) return;
+    const myAttempt = bundle.attempts.find((a) => a.user_id === me.id);
+    if (!myAttempt) return;
+    gcFiredRef.current = bundle.room.id;
+    const cumulativeWins = isWinner
+      ? recordDuelWin(bundle.room.id)
+      : getDuelWinsCount();
+    void submitDuelResult({
+      score: myAttempt.score,
+      won: isWinner,
+      perfect: myAttempt.crown === true,
+      cumulativeWins,
+    });
+  }, [isComplete, isWinner, me, bundle.room.id, bundle.attempts]);
   const isDraw = isComplete && winnerId == null && bundle.attempts.length === 2;
   const opponentMissing = isComplete && bundle.attempts.length < 2;
   const waitingForOpponent = !isComplete && myAttempt && !opponentAttempt;

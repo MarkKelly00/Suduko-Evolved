@@ -12,7 +12,13 @@ import { getLevelById, nextLevelId } from '@/game/content/levels';
 import { challengeService } from '@/services/supabase';
 import { computeChallengeWinner } from '@/game/sync/challengeWinner';
 import { useAuthStore } from '@/game/state/useAuthStore';
+import { useProgressStore } from '@/game/state/useProgressStore';
 import { useAuthGate } from '@/components/auth/AuthGate';
+import {
+  deriveCampaignTotals,
+  submitCampaignResult,
+  submitSprintResult,
+} from '@/game/leaderboards/leaderboardSubmissions';
 import {
   colors,
   fontFamily,
@@ -54,6 +60,40 @@ function ResultsScreen() {
     if (crown) hapticsService.puzzleComplete();
     else hapticsService.success();
   }, [crown]);
+
+  // Game Center submissions. Fire-and-forget on mount — by the time
+  // we reach Results, GameScreen / TimeTrialGameScreen has already
+  // called recordResult() / recordTimeTrialBest() so the progress
+  // store is at its post-completion state. The service layer no-ops
+  // on opt-out, on Android, on iOS without the native module, etc.,
+  // so this is always safe to call.
+  const gcFiredRef = useRef(false);
+  useEffect(() => {
+    if (gcFiredRef.current) return;
+    gcFiredRef.current = true;
+    const progress = useProgressStore.getState();
+    if (isSprint) {
+      void submitSprintResult({
+        score,
+        timeSeconds,
+        cleared: sprintCleared === true,
+        mistakes,
+        hintsUsed,
+      });
+    } else if (level) {
+      const totals = deriveCampaignTotals(progress.levels);
+      void submitCampaignResult({
+        level: level.index,
+        isCrown: crown === true,
+        hintsUsed,
+        totalStars: totals.totalStars,
+        totalCrowns: totals.totalCrowns,
+        perActCleared: totals.perActCleared,
+      });
+    }
+    // Mount-only effect — params are stable across this screen's lifecycle.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // If this was a challenge, post the opponent attempt and route to the
   // challenge result screen.
