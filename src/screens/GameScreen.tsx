@@ -101,7 +101,15 @@ function GameScreen() {
       score: breakdown.total,
       time: elapsedSec,
       xp,
-      cleanRun: a.mistakes === 0 && a.hintsUsed === 0,
+      // Bump streak on every successful level completion. The store
+      // field is named `cleanRun` for historical reasons — it used
+      // to require 0 mistakes AND 0 hints to count, but that was an
+      // overly strict definition (1 mistake erased a 9-level streak).
+      // Streak now represents "consecutive levels cleared", which
+      // matches what players intuitively expect. Crown qualification
+      // (which is a separate game concept) still requires the
+      // perfect criteria via calculateStars in scoring.ts.
+      cleanRun: true,
       nextLevelId: nextId,
     });
     // Local mock leaderboard (kept for offline/visual continuity).

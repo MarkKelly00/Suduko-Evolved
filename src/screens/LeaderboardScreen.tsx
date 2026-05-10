@@ -23,13 +23,7 @@ import {
 } from '@/components/leaderboards/LeaderboardRow';
 import { useAuthStore } from '@/game/state/useAuthStore';
 import { useProgressStore } from '@/game/state/useProgressStore';
-import { useSettingsStore } from '@/game/state/useSettingsStore';
 import { leaderboardService } from '@/services/supabase';
-import {
-  GAME_CENTER_LEADERBOARDS,
-  gameCenterService,
-  isPlatformIOS,
-} from '@/services/gameCenter';
 import {
   colors,
   fontFamily,
@@ -158,35 +152,11 @@ export default function LeaderboardScreen() {
     { key: 'global', label: 'Global' },
   ];
 
-  // Game Center "View in Game Center" CTA — iOS only, opt-in only,
-  // and only after the local player is authenticated. Maps the
-  // current filter to the closest matching GC leaderboard so taps
-  // open relevant data. Sprint filters → SPRINT_3MIN_SCORE; other
-  // filters fall through to the dashboard.
-  const gameCenterOptIn = useSettingsStore((s) => s.gameCenterOptIn);
-  const [gcAuthed, setGcAuthed] = useState(false);
-  useEffect(() => {
-    if (!isPlatformIOS() || !gameCenterOptIn) {
-      setGcAuthed(false);
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      const authed = await gameCenterService.isAuthenticated();
-      if (!cancelled) setGcAuthed(authed);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [gameCenterOptIn]);
-
-  const handleViewInGameCenter = () => {
-    const id =
-      filter.mode === 'time-trial' && filter.timeTrialMode === 'sprint-3min'
-        ? GAME_CENTER_LEADERBOARDS.SPRINT_3MIN_SCORE
-        : undefined;
-    void gameCenterService.showLeaderboard(id);
-  };
+  // The "View in Game Center" CTA used to live here, but it didn't
+  // fit visually with the segmented tabs + filter bar. It now lives in
+  // the Results screen's ResultsFriendsPanel — right next to "View
+  // leaderboard" — which is a more natural moment to bridge from a
+  // just-played run into the GC native UI.
 
   return (
     <ScreenBackground>
@@ -198,16 +168,6 @@ export default function LeaderboardScreen() {
         timeTrialModes={TIME_TRIAL_MODES}
         onChange={setFilter}
       />
-      {gcAuthed ? (
-        <View style={styles.gcCtaRow}>
-          <PremiumButton
-            label="View in Game Center"
-            variant="ghost"
-            compact
-            onPress={handleViewInGameCenter}
-          />
-        </View>
-      ) : null}
       {loading && !refreshing ? (
         <View style={styles.loadingWrap}>
           <ActivityIndicator color={colors.textMuted} />
@@ -317,11 +277,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  gcCtaRow: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xs,
-    alignItems: 'flex-end',
   },
   emptyWrap: {
     flex: 1,

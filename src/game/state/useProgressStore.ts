@@ -19,7 +19,13 @@ interface RecordResultInput {
   time: number;
   /** XP earned this run. */
   xp: number;
-  /** True iff this was a clean run (used to bump streak). */
+  /** Whether this run should extend the streak counter. Misnamed for
+   *  history — `cleanRun` once required 0 mistakes + 0 hints, but
+   *  that turned out to be too strict (a single mistake erased a long
+   *  streak). Today the call site in GameScreen passes `true` on every
+   *  successful completion, so the streak counts "consecutive levels
+   *  cleared". Crown qualification (the actually-perfect run) still
+   *  goes through `calculateStars()` in scoring.ts. */
   cleanRun: boolean;
   /** The next level id to unlock when this one is completed. */
   nextLevelId?: string;

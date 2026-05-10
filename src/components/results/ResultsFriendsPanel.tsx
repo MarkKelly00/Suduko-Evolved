@@ -6,11 +6,17 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { PremiumButton } from '@/components/ui/PremiumButton';
 import { useAuthStore } from '@/game/state/useAuthStore';
 import { useChallengeIntentStore } from '@/game/state/useChallengeIntentStore';
+import { useSettingsStore } from '@/game/state/useSettingsStore';
 import {
   challengeService,
   friendService,
   leaderboardService,
 } from '@/services/supabase';
+import {
+  GAME_CENTER_LEADERBOARDS,
+  gameCenterService,
+  isPlatformIOS,
+} from '@/services/gameCenter';
 import {
   colors,
   fontFamily,
@@ -79,6 +85,37 @@ export function ResultsFriendsPanel({
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
   const [sending, setSending] = useState(false);
   const [sentMessage, setSentMessage] = useState<string | null>(null);
+
+  // Game Center "View in Game Center" button visibility — iOS only,
+  // opt-in only, only when actually authed. Lives next to "View
+  // leaderboard" in the ranked state below.
+  const gameCenterOptIn = useSettingsStore((s) => s.gameCenterOptIn);
+  const [gcAuthed, setGcAuthed] = useState(false);
+  useEffect(() => {
+    if (!isPlatformIOS() || !gameCenterOptIn) {
+      setGcAuthed(false);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const authed = await gameCenterService.isAuthenticated();
+      if (!cancelled) setGcAuthed(authed);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [gameCenterOptIn]);
+
+  const handleViewInGameCenter = () => {
+    // Map this Result's flow to the most relevant Game Center board.
+    // Sprint → SPRINT_3MIN_SCORE. Campaign → LOGIC_GARDEN_STARS (the
+    // aggregate; we don't ship per-level GC leaderboards). Falls back
+    // to the dashboard if neither matches.
+    const id = isSprint
+      ? GAME_CENTER_LEADERBOARDS.SPRINT_3MIN_SCORE
+      : GAME_CENTER_LEADERBOARDS.LOGIC_GARDEN_STARS;
+    void gameCenterService.showLeaderboard(id);
+  };
 
   useEffect(() => {
     if (!me) {
@@ -327,6 +364,14 @@ export function ResultsFriendsPanel({
               onPress={openLeaderboard}
               compact
             />
+            {gcAuthed ? (
+              <PremiumButton
+                label="View in Game Center"
+                variant="secondary"
+                onPress={handleViewInGameCenter}
+                compact
+              />
+            ) : null}
           </View>
         </>
       ) : null}
@@ -381,6 +426,8 @@ const styles = StyleSheet.create({
   },
   ctaRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
     marginTop: spacing.xs,
   },
   ctaStack: {
