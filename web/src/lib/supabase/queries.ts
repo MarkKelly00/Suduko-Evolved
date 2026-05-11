@@ -137,11 +137,20 @@ export async function getGlobalLeaderboardsByLevel(
 }
 
 /**
- * Time-trial leaderboard for a given mode (e.g. 'sprint_3min').
+ * Time-trial leaderboard for a given mode (e.g. 'sprint-3min').
+ *
+ * The mode identifier MUST match the value the iOS app writes to the
+ * `time_trial_scores.mode` column — that's `'sprint-3min'` with a
+ * HYPHEN (per `TIME_TRIAL_MODES` in src/game/modes/timeTrial.ts).
+ * The earlier default of `'sprint_3min'` (underscore) returned 0
+ * rows and the website's Sprint tab showed "No entries yet" forever
+ * — same naming-mismatch class of bug as the older `world1-level-1`
+ * vs `world1-level1` issue.
+ *
  * period_key '' means all-time.
  */
 export async function getTimeTrialLeaderboard(
-  mode: string = 'sprint_3min',
+  mode: string = 'sprint-3min',
   periodKey: string = '',
   limit = 25,
 ): Promise<LeaderboardRow[]> {

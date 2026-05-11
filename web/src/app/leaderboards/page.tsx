@@ -34,7 +34,7 @@ export default async function LeaderboardsPage() {
   const [globalsByLevel, sprint] = configured
     ? await Promise.all([
         getGlobalLeaderboardsByLevel(25),
-        getTimeTrialLeaderboard('sprint_3min', '', 25),
+        getTimeTrialLeaderboard('sprint-3min', '', 25),
       ])
     : [EMPTY_GLOBALS, [] as LeaderboardRow[]];
 
