@@ -94,13 +94,32 @@ function TimeTrialGameScreen() {
   }, [mode, challengeContext?.puzzleSeed]);
 
   // Terminal state → finalize, persist, navigate.
+  //
+  // Closure-staleness guard: when the user navigates BACK into Time
+  // Trial after completing a previous sprint, the game store's
+  // `active` still holds the prior session (endSession() intentionally
+  // does NOT clear it). The selector on line 59 reads
+  // `active?.status ?? 'playing'`, so the very first render of this
+  // screen on a re-entry captures status='won' (or 'timedOut') in
+  // this effect's closure. The first useEffect above synchronously
+  // calls startSprintSession, which resets the live store to a fresh
+  // session with status='playing'. So the LIVE store and the
+  // closure-captured `status` disagree on this first run, and using
+  // the closure value would (and did) fire the terminal pipeline
+  // immediately — computing a score of 710 (0 correct + 360 time
+  // bonus + 200 no-mistake + 150 no-hint) for a fresh, untouched
+  // puzzle and bouncing to Results before the player saw the board.
+  //
+  // Fix: read the LIVE active state from the store and gate on its
+  // status. That ignores the stale closure and only fires after a
+  // genuine in-screen status transition.
   useEffect(() => {
-    if (status !== 'won' && status !== 'timedOut') return;
     const a = useGameStore.getState().active;
     if (!a || a.modeId == null) return;
+    if (a.status !== 'won' && a.status !== 'timedOut') return;
 
     const elapsedSec = Math.floor(a.elapsedMs / 1000);
-    const cleared = status === 'won';
+    const cleared = a.status === 'won';
     // For sprint scoring: count player placements as cells filled (whether
     // correct or not is folded in via tallies + mistakes). For a partial
     // run we approximate placements as `holeCount − empties remaining`.
