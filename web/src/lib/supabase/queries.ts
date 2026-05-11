@@ -98,25 +98,32 @@ export async function getGlobalLeaderboard(
 
 /**
  * Campaign level IDs covered by the website's leaderboard sub-selector.
+ *
  * Must match the iOS app's `levelId(index)` format (see
- * src/game/content/levels.ts:46-48). Currently only L1–L5 to mirror the
- * iOS Leaderboard screen's pill set; trivial to extend to all 30 by
- * appending more entries.
+ * src/game/content/levels.ts:46-48). Generated programmatically for all
+ * 30 levels of Logic Garden so the website doesn't fall behind when
+ * players grind past L5 — earlier the array was hardcoded to L1–L5 and
+ * a player at L7 saw a board that capped out at L5.
+ *
+ * Type stays `string` rather than a template literal union so
+ * downstream Record types resolve to plain `Record<string, ...>` —
+ * cleaner ergonomics for callers that iterate `Object.entries`.
  */
-export const CAMPAIGN_LEVEL_IDS = [
-  'world1-level-1',
-  'world1-level-2',
-  'world1-level-3',
-  'world1-level-4',
-  'world1-level-5',
-] as const;
-export type CampaignLevelId = (typeof CAMPAIGN_LEVEL_IDS)[number];
+const LOGIC_GARDEN_LEVEL_COUNT = 30;
+export const CAMPAIGN_LEVEL_IDS: readonly string[] = Array.from(
+  { length: LOGIC_GARDEN_LEVEL_COUNT },
+  (_, i) => `world1-level-${i + 1}`,
+);
+export type CampaignLevelId = string;
 
 /**
- * Fetch global leaderboards for all five campaign levels in parallel.
- * Returns a map keyed by level id. Bundle is small enough (5×25 rows of
- * tiny JSON) that we send all of it on the initial render and let the
- * client switch between levels instantly with no extra fetches.
+ * Fetch global leaderboards for every Logic Garden level in parallel.
+ * Returns a map keyed by level id. With 30 levels × max 25 rows of
+ * compact JSON (≈10 small fields per row), the worst-case payload is
+ * roughly ~375 KB — well within an initial-render budget — so we keep
+ * sending all of it server-side and let the client switch between
+ * levels instantly without extra round-trips. The 30 Supabase queries
+ * fire in parallel and the ISR cache (60s) absorbs the cost.
  */
 export async function getGlobalLeaderboardsByLevel(
   limit = 25,
