@@ -321,14 +321,20 @@ function RequestsTab({
               <SectionLabel>Incoming</SectionLabel>
               {incoming.map((req) => (
                 <View key={req.friendship.id} style={styles.requestRow}>
-                  <FriendListItem profile={req.profile} action={null} />
-                  <View style={styles.requestActions}>
-                    <PremiumButton
-                      label="Accept"
-                      variant="primary"
-                      compact
-                      onPress={() => void onAccept(req.friendship.id)}
-                    />
+                  {/* Accept lives inline on the card so the row has the
+                      same left-avatar / right-button visual balance as
+                      the Friends list. Decline is a quieter secondary
+                      action below — declining is the rarer choice and
+                      shouldn't compete visually with Accept. */}
+                  <FriendListItem
+                    profile={req.profile}
+                    action={{
+                      label: 'Accept',
+                      variant: 'primary',
+                      onPress: () => void onAccept(req.friendship.id),
+                    }}
+                  />
+                  <View style={styles.declineRow}>
                     <PremiumButton
                       label="Decline"
                       variant="ghost"
@@ -730,12 +736,16 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   requestRow: {
-    gap: spacing.sm,
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
   },
-  requestActions: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.base,
+  declineRow: {
+    // Right-align the Decline so the visual flow reads as:
+    //   "Accept is your primary action; Decline is here if you need it."
+    // Bottom-margin small because the row is followed by the next
+    // request — uniform vertical rhythm across the list.
+    alignItems: 'flex-end',
+    paddingRight: spacing.xs,
   },
   searchBar: {
     flexDirection: 'row',

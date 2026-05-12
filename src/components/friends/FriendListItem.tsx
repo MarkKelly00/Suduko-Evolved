@@ -79,7 +79,12 @@ const styles = StyleSheet.create({
   },
   info: {
     flex: 1,
-    gap: 2,
+    // Slightly looser vertical rhythm than the original gap=2 — gives
+    // the display name + handle + pills row room to breathe. Especially
+    // matters for profiles without a @handle (e.g. brand-new accounts)
+    // where only two tiers stack and the column previously read as
+    // cramped.
+    gap: 4,
   },
   name: {
     color: colors.text,
@@ -93,7 +98,10 @@ const styles = StyleSheet.create({
   pillsRow: {
     flexDirection: 'row',
     gap: spacing.xs,
-    marginTop: spacing.xxs,
+    // marginTop dropped — `info.gap` now controls spacing above this
+    // row, keeping the cadence consistent whether or not a @handle
+    // is present.
+    marginTop: 2,
   },
   actionWrapper: {
     minWidth: 90,
