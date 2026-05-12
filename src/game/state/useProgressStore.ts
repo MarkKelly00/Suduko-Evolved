@@ -280,9 +280,20 @@ export const useProgressStore = create<ProgressState>((set, get) => ({
     persist(sanitized);
   },
   reset: () => {
+    // Preserve hasSeenTutorial across resets — it's a one-time
+    // device-level UX flag, not account data. Earlier wipe-on-signout
+    // was inadvertently re-showing the tutorial modal to returning
+    // users every time they signed back in: reset() called
+    // defaultProgress() which sets hasSeenTutorial=false, then the
+    // home screen detected the flag was false and re-triggered the
+    // tutorial. Keep this device-level breadcrumb survival-flagged.
     const def = defaultProgress();
-    set(def);
-    persist(def);
+    const preserved: ProgressStoreV1 = {
+      ...def,
+      hasSeenTutorial: get().hasSeenTutorial,
+    };
+    set(preserved);
+    persist(preserved);
   },
   isUnlocked: (levelId) => get().unlockedLevels.includes(levelId),
   getLevelEntry: (levelId) => get().levels[levelId] ?? null,

@@ -53,6 +53,65 @@ export function subscribeRoomState(
 }
 
 /**
+ * Subscribe to invite-acceptance events for the local player.
+ *
+ * Fires when a row in `duel_invites` filtered by the local user's
+ * id as challenger transitions from `pending` to `accepted` (or
+ * any status where the row's `room_id` is now populated). The
+ * realtime payload includes the redeem RPC's outputs — most
+ * importantly the new `room_id`, `puzzle_seed`, `start_at`, and
+ * `opponent_id` — so the inviter's app can drop the user straight
+ * into DuelLobby without an extra round-trip.
+ *
+ * Mounted once per session in App.tsx after auth hydrates.
+ * Returns the unsubscribe so the listener can be cleaned up on
+ * sign-out / profile change.
+ */
+export function subscribeInviteAcceptance(
+  challengerId: string,
+  onAccepted: (invite: {
+    id: string;
+    challenger_id: string;
+    opponent_id: string | null;
+    room_id: string | null;
+    mode: string;
+    puzzle_seed: string | null;
+    status: string;
+    use_count: number;
+    updated_at: string | null;
+  }) => void,
+): Unsubscribe {
+  const supabase = getSupabase();
+  if (!supabase) return () => undefined;
+  const channel = supabase
+    .channel(`duel_invites_accepted:${challengerId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'duel_invites',
+        filter: `challenger_id=eq.${challengerId}`,
+      },
+      (payload) => {
+        const next = payload.new as Record<string, unknown> | null;
+        const prev = payload.old as Record<string, unknown> | null;
+        if (!next) return;
+        // Only fire when status flips INTO 'accepted'. Subsequent
+        // updates to the same row (e.g. expiry sweeps) shouldn't
+        // re-pop the banner.
+        if (prev?.status === 'accepted') return;
+        if (next.status !== 'accepted') return;
+        onAccepted(
+          next as unknown as Parameters<typeof onAccepted>[0],
+        );
+      },
+    )
+    .subscribe();
+  return () => detach(channel);
+}
+
+/**
  * Subscribe to participant changes for a room — useful for opponent
  * heartbeat updates (current_score, progress_percent, last_seen_at).
  */

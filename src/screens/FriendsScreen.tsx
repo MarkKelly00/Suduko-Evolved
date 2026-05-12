@@ -219,6 +219,7 @@ export default function FriendsScreen() {
             await challengeService.declineChallenge(id);
             void refresh();
           }}
+          onViewResults={(row) => viewChallengeResults(row, me, navigation)}
           onAddFriends={() => setActiveTab('add')}
         />
       ) : null}
@@ -510,6 +511,7 @@ function ChallengesTab({
   onRefresh,
   onPlay,
   onDecline,
+  onViewResults,
   onAddFriends,
 }: {
   me: Profile;
@@ -520,6 +522,10 @@ function ChallengesTab({
   onRefresh: () => void;
   onPlay: (row: ChallengeRow) => void;
   onDecline: (id: string) => Promise<void>;
+  /** Tapping a completed challenge surfaces its full results screen.
+   *  The handler is async because it has to fetch attempts to build
+   *  the ChallengeResult navigation payload. */
+  onViewResults: (row: ChallengeRow) => Promise<void>;
   onAddFriends: () => void;
 }) {
   if (inbox.length === 0 && outgoing.length === 0 && completed.length === 0) {
@@ -595,6 +601,8 @@ function ChallengesTab({
                   challenger={row.challenger}
                   opponent={row.opponent}
                   modeLabel={modeLabelFor(row.challenge)}
+                  primaryLabel="View results"
+                  onPress={() => void onViewResults(row)}
                 />
               ))}
             </View>
@@ -678,6 +686,59 @@ async function playChallenge(
       challengeContext,
     });
   }
+}
+
+/**
+ * Drill into a completed challenge's results screen. Fetches both
+ * attempts from `challenge_attempts`, builds the ChallengeResult
+ * route payload, and navigates. If either attempt is missing (rare —
+ * server only marks a challenge "completed" when both have posted)
+ * we surface a friendly alert rather than navigating to an empty
+ * results screen.
+ */
+async function viewChallengeResults(
+  row: ChallengeRow,
+  me: Profile,
+  navigation: RootStackNavigation,
+): Promise<void> {
+  const { challenge, challenger, opponent } = row;
+  const attempts = await challengeService.getChallengeAttempts(challenge.id);
+  const myAttempt = attempts.find((a) => a.user_id === me.id);
+  const theirAttempt = attempts.find((a) => a.user_id !== me.id);
+  if (!myAttempt || !theirAttempt) {
+    Alert.alert(
+      'Results unavailable',
+      'Both players haven’t posted scores for this challenge yet.',
+    );
+    return;
+  }
+  const themProfile = theirAttempt.user_id === challenge.challenger_id ? challenger : opponent;
+  navigation.navigate('ChallengeResult', {
+    challengeId: challenge.id,
+    mode: challenge.mode === 'sprint' ? 'sprint' : 'campaign',
+    levelId: challenge.level_id ?? challenge.sprint_mode_id ?? '',
+    you: {
+      userId: me.id,
+      name: me.display_name ?? me.username ?? 'You',
+      avatarUrl: me.avatar_url,
+      score: myAttempt.score,
+      timeSeconds: Math.round(myAttempt.time_ms / 1000),
+      mistakes: myAttempt.mistakes,
+      hints: myAttempt.hints,
+      crown: myAttempt.crown ?? false,
+    },
+    them: {
+      userId: theirAttempt.user_id,
+      name: themProfile?.display_name ?? themProfile?.username ?? 'Friend',
+      avatarUrl: themProfile?.avatar_url ?? null,
+      score: theirAttempt.score,
+      timeSeconds: Math.round(theirAttempt.time_ms / 1000),
+      mistakes: theirAttempt.mistakes,
+      hints: theirAttempt.hints,
+      crown: theirAttempt.crown ?? false,
+    },
+    winnerId: challenge.winner_id,
+  });
 }
 
 // Keep the unused-status type satisfied (kept for completeness).

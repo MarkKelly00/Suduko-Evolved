@@ -13,7 +13,14 @@ import { useGameStore } from '@/game/state/useGameStore';
 import { useAuthStore } from '@/game/state/useAuthStore';
 import { audioService } from '@/services/audio/audioService';
 import { gameCenterService } from '@/services/gameCenter';
-import { authService, isSupabaseConfigured } from '@/services/supabase';
+import { duelRealtimeService } from '@/services/duel';
+import { InviteAcceptedBanner } from '@/components/duel/InviteAcceptedBanner';
+import { useDuelInviteStore } from '@/game/state/useDuelInviteStore';
+import {
+  authService,
+  isSupabaseConfigured,
+  profileService,
+} from '@/services/supabase';
 import { drainPendingSubmissions } from '@/game/sync/pendingSubmissionsQueue';
 import { runLocalToCloudSync } from '@/game/sync/localToCloudSync';
 import { runCloudToLocalSync } from '@/game/sync/cloudToLocalSync';
@@ -185,6 +192,63 @@ export default function App() {
     return () => sub.remove();
   }, []);
 
+  // Listen for invite-acceptance events for the local player. When a
+  // friend taps the inviter's link and the redeem RPC flips
+  // duel_invites.status to 'accepted', this realtime subscription
+  // fires, hydrates the friend's profile for the banner copy, and
+  // pushes an InviteAcceptance into useDuelInviteStore — which is
+  // rendered globally by <InviteAcceptedBanner /> in RootNavigator.
+  //
+  // Re-subscribes when the active profile changes (sign-out → sign-in
+  // as a different user). Unsubscribes on cleanup so we don't leak
+  // channels across sessions.
+  const myProfileId = useAuthStore((s) => s.profile?.id ?? null);
+  useEffect(() => {
+    if (!myProfileId) return;
+    const unsub = duelRealtimeService.subscribeInviteAcceptance(
+      myProfileId,
+      async (invite) => {
+        if (!invite.room_id || !invite.puzzle_seed || !invite.opponent_id) {
+          // Server should never flip status to 'accepted' without
+          // populating these — but guard against a partial UPDATE.
+          if (__DEV__) {
+            console.warn(
+              '[App] invite acceptance missing room_id/seed/opponent_id',
+              invite,
+            );
+          }
+          return;
+        }
+        // Pull the friend's profile so the banner has a name + avatar.
+        // Best-effort — if it fails, fall back to a generic label.
+        const friend = await profileService.getProfile(invite.opponent_id);
+        useDuelInviteStore.getState().setAcceptance({
+          inviteId: invite.id,
+          challengerId: invite.challenger_id,
+          friendName:
+            friend?.display_name ?? friend?.username ?? 'A friend',
+          friendAvatarUrl: friend?.avatar_url ?? null,
+          roomId: invite.room_id,
+          puzzleSeed: invite.puzzle_seed,
+          mode: invite.mode,
+          // The redeem RPC sets duel_rooms.start_at to now + 5s,
+          // but we don't have that on the invite row. The DuelLobby
+          // re-reads start_at from the room when it mounts, so we
+          // can pass `updated_at` (a close-enough timestamp) or an
+          // empty string here — DuelLobby's effect re-fetches the
+          // canonical value either way.
+          startAt: invite.updated_at ?? new Date().toISOString(),
+          receivedAt: Date.now(),
+        });
+      },
+    );
+    return () => {
+      unsub();
+      // Clear any pending banner when the user signs out / switches.
+      useDuelInviteStore.getState().dismiss();
+    };
+  }, [myProfileId]);
+
   if (!hydrated) return null;
 
   const navTheme = {
@@ -207,6 +271,11 @@ export default function App() {
         <NavigationContainer theme={navTheme} linking={linkingConfig}>
           <StatusBar style="light" />
           <RootNavigator />
+          {/* Global overlay: appears whenever the invite-acceptance
+              realtime subscription writes a record into useDuelInviteStore.
+              Lives outside RootNavigator's stack so it persists across
+              every navigation transition. */}
+          <InviteAcceptedBanner />
         </NavigationContainer>
       </SafeAreaProvider>
     </GestureHandlerRootView>

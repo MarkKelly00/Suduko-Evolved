@@ -53,10 +53,37 @@ export default function DuelResultsScreen() {
   const [friendStatus, setFriendStatus] = useState<
     'none' | 'pending_in' | 'pending_out' | 'accepted' | 'blocked'
   >('none');
+  // Three defensive guards against the "infinite spinner" failure
+  // mode users reported (data is in cloud, but the screen never
+  // resolves):
+  //   1. loadedOnceRef — once we have a non-null bundle, future
+  //      transient null returns from refresh() do NOT reset bundle.
+  //      Prevents a realtime-driven refetch failure (network blip,
+  //      RLS hiccup) from blanking a successfully-loaded screen.
+  //   2. showRetry — after 3s with no bundle, expose a manual "Try
+  //      again" button so the user is never stranded.
+  //   3. __DEV__ console.warn on the load path so future failures
+  //      are diagnosable without code changes.
+  const loadedOnceRef = useRef(false);
+  const [showRetry, setShowRetry] = useState(false);
 
   const refresh = async () => {
-    const b = await duelService.getDuelRoom(roomId);
-    setBundle(b);
+    try {
+      const b = await duelService.getDuelRoom(roomId);
+      if (b) {
+        loadedOnceRef.current = true;
+        setBundle(b);
+      } else if (__DEV__) {
+        console.warn(
+          '[DuelResultsScreen] getDuelRoom returned null',
+          { roomId, loadedOnce: loadedOnceRef.current },
+        );
+      }
+      // Subsequent null returns AFTER a successful load are silently
+      // ignored — see comment block above.
+    } catch (err) {
+      if (__DEV__) console.warn('[DuelResultsScreen] refresh threw:', err);
+    }
   };
 
   useEffect(() => {
@@ -64,7 +91,13 @@ export default function DuelResultsScreen() {
     const unsub = duelRealtimeService.subscribeRoomState(roomId, () => {
       void refresh();
     });
-    return () => unsub();
+    const retryTimer = setTimeout(() => {
+      if (!loadedOnceRef.current) setShowRetry(true);
+    }, 3000);
+    return () => {
+      unsub();
+      clearTimeout(retryTimer);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId]);
 
@@ -89,6 +122,22 @@ export default function DuelResultsScreen() {
         <TopBar title="Duel Results" />
         <View style={styles.center}>
           <ActivityIndicator color={colors.textMuted} />
+          {showRetry ? (
+            <View style={styles.retryWrap}>
+              <Text style={styles.retryHint}>
+                Taking longer than usual to load.
+              </Text>
+              <PremiumButton
+                label="Try again"
+                variant="secondary"
+                compact
+                onPress={() => {
+                  setShowRetry(false);
+                  void refresh();
+                }}
+              />
+            </View>
+          ) : null}
         </View>
       </ScreenBackground>
     );
@@ -312,6 +361,18 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: spacing.base,
+  },
+  retryWrap: {
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.base,
+    paddingHorizontal: spacing.lg,
+  },
+  retryHint: {
+    color: colors.textMuted,
+    fontSize: fontSize.sm,
+    textAlign: 'center',
   },
   banner: {
     alignItems: 'center',
