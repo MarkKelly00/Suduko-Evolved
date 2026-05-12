@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   StyleSheet,
@@ -41,9 +41,41 @@ interface Props {
 
 const DEBOUNCE_MS = 350;
 
-export function UsernameField({ value, onChange, onStatusChange, offline = false }: Props) {
+/**
+ * IMPORTANT — keyboard focus stability.
+ *
+ * Earlier this component was re-creating the inline style array and tone
+ * object on every render, plus calling `onStatusChange` from a useEffect
+ * whose dependency array included the callback prop. That cascade caused
+ * the parent View's native style to be re-applied on every keystroke,
+ * which iOS interpreted as a layout pass and dropped the TextInput's
+ * first-responder status — so the keyboard collapsed after every letter.
+ *
+ * Fixes:
+ *   1. `React.memo` so parent state churn (e.g. parent's usernameStatus
+ *      state) doesn't re-render this component when only the status changed.
+ *   2. `useMemo` on the tone + style arrays so the inputRow's style array
+ *      is referentially stable across renders when status hasn't transitioned.
+ *   3. `useCallback` on onChangeText so the TextInput prop is stable.
+ *   4. A ref for `onStatusChange` so the parent-notify useEffect doesn't
+ *      re-run when the prop reference changes — only when status flips.
+ */
+export const UsernameField = React.memo(function UsernameField({
+  value,
+  onChange,
+  onStatusChange,
+  offline = false,
+}: Props) {
   const [status, setStatus] = useState<Status>({ state: 'idle' });
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Keep the latest onStatusChange in a ref so the parent-notify effect can
+  // depend only on `status` — avoids spurious effect runs when the parent
+  // passes an inline arrow function.
+  const onStatusChangeRef = useRef(onStatusChange);
+  useEffect(() => {
+    onStatusChangeRef.current = onStatusChange;
+  }, [onStatusChange]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -72,25 +104,38 @@ export function UsernameField({ value, onChange, onStatusChange, offline = false
   }, [value, offline]);
 
   useEffect(() => {
-    onStatusChange?.(status);
-  }, [status, onStatusChange]);
+    onStatusChangeRef.current?.(status);
+  }, [status]);
 
-  const tone = toneFor(status);
+  const tone = useMemo(() => toneFor(status), [status]);
+
+  // Memoize the input-row style array so its reference is stable when
+  // status doesn't change. RN's native bridge re-applies the View's
+  // style on every new array reference; on iOS that can drop the
+  // keyboard's first-responder.
+  const inputRowStyle = useMemo(
+    () => [styles.inputRow, { borderColor: tone.border }, tone.shadow],
+    [tone.border, tone.shadow],
+  );
+
+  const hintStyle = useMemo(
+    () => [styles.hint, { color: tone.hintColor }],
+    [tone.hintColor],
+  );
+
+  const handleChangeText = useCallback(
+    (t: string) => onChange(normalizeUsername(t)),
+    [onChange],
+  );
 
   return (
     <View style={styles.container}>
       <Text style={styles.label}>USERNAME</Text>
-      <View
-        style={[
-          styles.inputRow,
-          { borderColor: tone.border },
-          tone.shadow as object,
-        ]}
-      >
+      <View style={inputRowStyle}>
         <Text style={styles.at}>@</Text>
         <TextInput
           value={value}
-          onChangeText={(t) => onChange(normalizeUsername(t))}
+          onChangeText={handleChangeText}
           placeholder="yourname"
           placeholderTextColor={colors.textDim}
           autoCapitalize="none"
@@ -99,13 +144,17 @@ export function UsernameField({ value, onChange, onStatusChange, offline = false
           maxLength={20}
           style={styles.input}
           accessibilityLabel="Username"
+          // Keep the keyboard up between keystrokes — without this the
+          // default RN behaviour can drop the keyboard when the row's
+          // native props are re-applied.
+          blurOnSubmit={false}
         />
         <View style={styles.statusSlot}>{renderStatus(status)}</View>
       </View>
-      <Text style={[styles.hint, { color: tone.hintColor }]}>{tone.hint}</Text>
+      <Text style={hintStyle}>{tone.hint}</Text>
     </View>
   );
-}
+});
 
 function renderStatus(status: Status): React.ReactElement | null {
   if (status.state === 'checking') return <ActivityIndicator color={colors.textMuted} />;

@@ -1,6 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -65,6 +67,15 @@ export default function EditProfileScreen() {
     (usernameStatus.state === 'idle' && (profile?.username ?? '') === username);
   const canSave =
     dirty && usernameOk && trimmedDisplayName.length > 0 && !saving;
+
+  // Stable callbacks so the memoized <UsernameField /> doesn't see a new
+  // prop reference on every parent re-render — see notes inside that
+  // component for why this matters for keyboard focus.
+  const handleUsernameChange = useCallback((next: string) => setUsername(next), []);
+  const handleUsernameStatusChange = useCallback(
+    (status: UsernameFieldStatus) => setUsernameStatus(status),
+    [],
+  );
 
   const handleSave = async () => {
     if (!canSave) return;
@@ -162,77 +173,94 @@ export default function EditProfileScreen() {
   return (
     <ScreenBackground>
       <TopBar title="Edit Profile" />
-      <ScrollView contentContainerStyle={styles.body}>
-        {isOnboarding ? (
-          <GlassCard>
-            <Text style={styles.bannerHeading}>Pick a username</Text>
-            <Text style={styles.bannerBody}>
-              {`It's how friends find you. You can change it later.`}
-            </Text>
-          </GlassCard>
-        ) : null}
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+      >
+        <ScrollView
+          contentContainerStyle={styles.body}
+          // `handled` lets us tap buttons / nested touchables without the
+          // ScrollView intercepting the gesture and dismissing the
+          // keyboard between letters.
+          keyboardShouldPersistTaps="handled"
+          // `interactive` means the keyboard slides away when you drag
+          // it down, but doesn't drop on scroll-direction changes — the
+          // smoothest behaviour while editing the username.
+          keyboardDismissMode="interactive"
+        >
+          {isOnboarding ? (
+            <GlassCard>
+              <Text style={styles.bannerHeading}>Pick a username</Text>
+              <Text style={styles.bannerBody}>
+                {`It's how friends find you. You can change it later.`}
+              </Text>
+            </GlassCard>
+          ) : null}
 
-        <View style={styles.avatarBlock}>
-          <Avatar
-            size="xl"
-            url={profile?.avatar_url ?? null}
-            fallbackName={trimmedDisplayName || profile?.username || null}
-          />
-          <Pressable
-            onPress={handleChangeAvatar}
-            accessibilityRole="button"
-            accessibilityLabel="Change avatar"
-          >
-            <Text style={styles.changeAvatar}>Change avatar</Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.field}>
-          <Text style={styles.label}>DISPLAY NAME</Text>
-          <View style={styles.inputContainer}>
-            <TextInput
-              value={displayName}
-              onChangeText={setDisplayName}
-              placeholder="How friends see you"
-              placeholderTextColor={colors.textDim}
-              maxLength={30}
-              style={styles.input}
-              accessibilityLabel="Display name"
+          <View style={styles.avatarBlock}>
+            <Avatar
+              size="xl"
+              url={profile?.avatar_url ?? null}
+              fallbackName={trimmedDisplayName || profile?.username || null}
             />
+            <Pressable
+              onPress={handleChangeAvatar}
+              accessibilityRole="button"
+              accessibilityLabel="Change avatar"
+            >
+              <Text style={styles.changeAvatar}>Change avatar</Text>
+            </Pressable>
           </View>
-          <Text style={styles.hint}>Up to 30 characters.</Text>
-        </View>
 
-        <UsernameField
-          value={username}
-          onChange={setUsername}
-          onStatusChange={setUsernameStatus}
-        />
+          <View style={styles.field}>
+            <Text style={styles.label}>DISPLAY NAME</Text>
+            <View style={styles.inputContainer}>
+              <TextInput
+                value={displayName}
+                onChangeText={setDisplayName}
+                placeholder="How friends see you"
+                placeholderTextColor={colors.textDim}
+                maxLength={30}
+                style={styles.input}
+                accessibilityLabel="Display name"
+                blurOnSubmit={false}
+              />
+            </View>
+            <Text style={styles.hint}>Up to 30 characters.</Text>
+          </View>
 
-        {error ? (
-          <InlineToast variant="error" message={error} nonce={error} />
-        ) : null}
-        {success ? (
-          <InlineToast variant="success" message={success} nonce={success} />
-        ) : null}
+          <UsernameField
+            value={username}
+            onChange={handleUsernameChange}
+            onStatusChange={handleUsernameStatusChange}
+          />
 
-        <PremiumButton
-          label={saving ? 'Saving…' : 'Save'}
-          variant="primary"
-          onPress={handleSave}
-          disabled={!canSave}
-        />
+          {error ? (
+            <InlineToast variant="error" message={error} nonce={error} />
+          ) : null}
+          {success ? (
+            <InlineToast variant="success" message={success} nonce={success} />
+          ) : null}
 
-        <PremiumButton
-          label="Sign out"
-          variant="ghost"
-          onPress={handleSignOut}
-        />
+          <PremiumButton
+            label={saving ? 'Saving…' : 'Save'}
+            variant="primary"
+            onPress={handleSave}
+            disabled={!canSave}
+          />
 
-        <Pressable onPress={handleDeleteAccount} style={styles.deleteLink}>
-          <Text style={styles.deleteLinkText}>Delete account</Text>
-        </Pressable>
-      </ScrollView>
+          <PremiumButton
+            label="Sign out"
+            variant="ghost"
+            onPress={handleSignOut}
+          />
+
+          <Pressable onPress={handleDeleteAccount} style={styles.deleteLink}>
+            <Text style={styles.deleteLinkText}>Delete account</Text>
+          </Pressable>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </ScreenBackground>
   );
 }
@@ -274,6 +302,9 @@ async function launchAvatarPicker(navigation: RootStackNavigation): Promise<void
 }
 
 const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+  },
   body: {
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xxl,

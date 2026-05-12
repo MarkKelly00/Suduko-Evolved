@@ -15,6 +15,7 @@ import { audioService } from '@/services/audio/audioService';
 import { gameCenterService } from '@/services/gameCenter';
 import { duelRealtimeService } from '@/services/duel';
 import { InviteAcceptedBanner } from '@/components/duel/InviteAcceptedBanner';
+import { UsernameRequiredBanner } from '@/components/profile/UsernameRequiredBanner';
 import { useDuelInviteStore } from '@/game/state/useDuelInviteStore';
 import {
   authService,
@@ -276,6 +277,11 @@ export default function App() {
               Lives outside RootNavigator's stack so it persists across
               every navigation transition. */}
           <InviteAcceptedBanner />
+          {/* Persistent prompt for authenticated users who haven't yet
+              picked a `@handle`. Auto-hides when profile.username is
+              set, and is suppressed on EditProfile / Auth screens so we
+              don't nag users while they're already setting one up. */}
+          <UsernameRequiredBanner />
         </NavigationContainer>
       </SafeAreaProvider>
     </GestureHandlerRootView>
