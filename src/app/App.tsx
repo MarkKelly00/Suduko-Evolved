@@ -26,6 +26,8 @@ import { drainPendingSubmissions } from '@/game/sync/pendingSubmissionsQueue';
 import { runLocalToCloudSync } from '@/game/sync/localToCloudSync';
 import { runCloudToLocalSync } from '@/game/sync/cloudToLocalSync';
 import { RootNavigator } from '@/app/navigation/RootNavigator';
+import { navigationRef } from '@/app/navigation/navigationRef';
+import { AppErrorBoundary } from '@/components/ui/AppErrorBoundary';
 import { colors } from '@/theme';
 
 export default function App() {
@@ -267,23 +269,36 @@ export default function App() {
   };
 
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }}>
-      <SafeAreaProvider>
-        <NavigationContainer theme={navTheme} linking={linkingConfig}>
-          <StatusBar style="light" />
-          <RootNavigator />
-          {/* Global overlay: appears whenever the invite-acceptance
-              realtime subscription writes a record into useDuelInviteStore.
-              Lives outside RootNavigator's stack so it persists across
-              every navigation transition. */}
-          <InviteAcceptedBanner />
-          {/* Persistent prompt for authenticated users who haven't yet
-              picked a `@handle`. Auto-hides when profile.username is
-              set, and is suppressed on EditProfile / Auth screens so we
-              don't nag users while they're already setting one up. */}
-          <UsernameRequiredBanner />
-        </NavigationContainer>
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+    // Root error boundary — catches any unhandled JS render error so
+    // it can't propagate to the native bridge and become a fatal
+    // crash on launch (build 16 regression: a banner component
+    // mounted at the NavigationContainer root used `useNavigation`,
+    // which threw on initial mount in production and brought down
+    // the whole app shell via RCTExceptionsManager).
+    <AppErrorBoundary>
+      <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }}>
+        <SafeAreaProvider>
+          <NavigationContainer
+            ref={navigationRef}
+            theme={navTheme}
+            linking={linkingConfig}
+          >
+            <StatusBar style="light" />
+            <RootNavigator />
+            {/* Global overlay: appears whenever the invite-acceptance
+                realtime subscription writes a record into useDuelInviteStore.
+                Lives outside RootNavigator's stack so it persists across
+                every navigation transition. Uses the imperative
+                `navigationRef` for taps — NOT `useNavigation`. */}
+            <InviteAcceptedBanner />
+            {/* Persistent prompt for authenticated users who haven't yet
+                picked a `@handle`. Auto-hides when profile.username is
+                set, and is suppressed on EditProfile / Auth screens so we
+                don't nag users while they're already setting one up. */}
+            <UsernameRequiredBanner />
+          </NavigationContainer>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    </AppErrorBoundary>
   );
 }

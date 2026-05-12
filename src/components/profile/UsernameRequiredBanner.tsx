@@ -16,21 +16,28 @@
  *   - Does NOT auto-dismiss. Persistent prompt until the user sets a
  *     handle (at which point the banner disappears on its own once
  *     `profile.username` is non-empty).
- *   - Tapping navigates to `EditProfile`.
+ *   - Tapping navigates to `EditProfile` via the imperative
+ *     `navigationRef` (NOT `useNavigation`, which can crash on initial
+ *     mount when called outside a Screen's tree — see notes in
+ *     `navigationRef.ts`).
  *
- * Mounted globally at the root of `RootNavigator` inside `App.tsx`,
- * alongside `<InviteAcceptedBanner />` — when both are active the
- * username banner sits below the invite banner (invite banner is
- * transient, this one is persistent).
+ * Mounted globally at the root of `App.tsx` alongside
+ * `<InviteAcceptedBanner />`. The username banner sits below the
+ * invite banner when both are visible (invite banner is transient,
+ * this one is persistent).
  */
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useNavigation, useNavigationState } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuthStore } from '@/game/state/useAuthStore';
 import { useDuelInviteStore } from '@/game/state/useDuelInviteStore';
+import {
+  getActiveRouteName,
+  navigateSafe,
+  navigationRef,
+} from '@/app/navigation/navigationRef';
 import {
   colors,
   fontFamily,
@@ -40,28 +47,46 @@ import {
   radius,
   spacing,
 } from '@/theme';
-import type { RootStackNavigation } from '@/app/navigation/routes';
 
 // Screens where the banner is intentionally suppressed. The user is
 // already setting up their profile, or in the middle of signing in.
 const SUPPRESS_ON_ROUTES = new Set(['EditProfile', 'Auth', 'AvatarCrop']);
 
 export function UsernameRequiredBanner() {
-  const navigation = useNavigation<RootStackNavigation>();
   const insets = useSafeAreaInsets();
 
   const status = useAuthStore((s) => s.status);
   const profile = useAuthStore((s) => s.profile);
   const inviteAcceptance = useDuelInviteStore((s) => s.acceptance);
 
-  // Read the currently focused route name. `useNavigationState` re-renders
-  // this banner when navigation moves between screens, so the hide-on-
-  // EditProfile rule stays in sync.
-  const activeRouteName = useNavigationState((state) => {
-    if (!state) return null;
-    const route = state.routes[state.index];
-    return route?.name ?? null;
-  });
+  // Track the active route via the navigation ref's state listener.
+  // We intentionally avoid `useNavigationState` — it can throw on
+  // initial mount when this component is a sibling of <RootNavigator />
+  // and the container's state hasn't hydrated yet.
+  const [activeRouteName, setActiveRouteName] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Seed with the current route (if any) on first mount.
+    setActiveRouteName(getActiveRouteName());
+    // The ref's `state` listener fires every time the navigator's
+    // state changes — that's our cue to refresh the route name.
+    const handler = () => setActiveRouteName(getActiveRouteName());
+    // The ref might not be ready synchronously on first render.
+    // Schedule a microtask to attach the listener once the container
+    // has had a chance to bind.
+    let unsubscribe: (() => void) | undefined;
+    const id = setTimeout(() => {
+      if (navigationRef.isReady()) {
+        unsubscribe = navigationRef.addListener('state', handler);
+        // And re-read the active route now that we know the ref is ready.
+        handler();
+      }
+    }, 0);
+    return () => {
+      clearTimeout(id);
+      unsubscribe?.();
+    };
+  }, []);
 
   const hasUsername =
     typeof profile?.username === 'string' && profile.username.length > 0;
@@ -75,10 +100,12 @@ export function UsernameRequiredBanner() {
   // If the invite-acceptance banner is currently visible, drop this one
   // below it so they don't overlap. Invite banner is ~64–72px tall
   // including its safe-area padding.
-  const verticalOffset = inviteAcceptance ? insets.top + spacing.sm + 72 : insets.top + spacing.sm;
+  const verticalOffset = inviteAcceptance
+    ? insets.top + spacing.sm + 72
+    : insets.top + spacing.sm;
 
   const handleTap = () => {
-    navigation.navigate('EditProfile');
+    navigateSafe('EditProfile');
   };
 
   return (

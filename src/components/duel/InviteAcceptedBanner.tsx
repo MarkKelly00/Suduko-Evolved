@@ -3,15 +3,21 @@
  *
  * Global gold banner that appears when a duel invite the local
  * player generated has been accepted by their friend. Mounted at
- * the root of `RootNavigator` so it overlays every screen — the
- * inviter sees it regardless of which screen they're on when the
- * acceptance arrives.
+ * the root of `App.tsx` (sibling of <RootNavigator />) so it overlays
+ * every screen — the inviter sees it regardless of which screen
+ * they're on when the acceptance arrives.
+ *
+ * Important: this component lives OUTSIDE any Navigator's Screen
+ * tree, so it MUST NOT call `useNavigation()` / `useNavigationState()`
+ * directly — those hooks can crash on initial mount when the
+ * NavigationContainer's state hasn't hydrated yet. Use the imperative
+ * `navigationRef` instead.
  *
  * Data flow:
  *   useDuelInviteStore.acceptance    ← realtime callback in App.tsx
  *                                       writes here when a duel_invites
  *                                       row flips status to 'accepted'.
- *   tap → navigation.navigate('DuelLobby', { ... }) + dismiss
+ *   tap → navigationRef.navigate('DuelLobby', { ... }) + dismiss
  *   auto-dismiss after 10 seconds if untapped.
  *
  * Visual treatment mirrors the rest of the app's premium gold-accent
@@ -20,11 +26,11 @@
 
 import React, { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/profile/Avatar';
 import { useDuelInviteStore } from '@/game/state/useDuelInviteStore';
+import { navigateSafe } from '@/app/navigation/navigationRef';
 import {
   colors,
   fontFamily,
@@ -34,14 +40,12 @@ import {
   radius,
   spacing,
 } from '@/theme';
-import type { RootStackNavigation } from '@/app/navigation/routes';
 
 const AUTO_DISMISS_MS = 10_000;
 
 export function InviteAcceptedBanner() {
   const acceptance = useDuelInviteStore((s) => s.acceptance);
   const dismiss = useDuelInviteStore((s) => s.dismiss);
-  const navigation = useNavigation<RootStackNavigation>();
   const insets = useSafeAreaInsets();
 
   // Auto-dismiss after 10 s of inactivity. Reset whenever the
@@ -55,7 +59,7 @@ export function InviteAcceptedBanner() {
   if (!acceptance) return null;
 
   const handleTap = () => {
-    navigation.navigate('DuelLobby', {
+    navigateSafe('DuelLobby', {
       roomId: acceptance.roomId,
       puzzleSeed: acceptance.puzzleSeed,
       mode: acceptance.mode,
