@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
@@ -16,9 +16,12 @@ interface ChipProps {
   label: string;
   active: boolean;
   onPress: () => void;
+  /** `biome` chips are visually heavier than level chips so the hierarchy
+   *  reads (biome > level) — mirrors the website's leaderboard. */
+  size?: 'level' | 'biome';
 }
 
-function Chip({ label, active, onPress }: ChipProps) {
+function Chip({ label, active, onPress, size = 'level' }: ChipProps) {
   return (
     <Pressable
       onPress={() => {
@@ -28,10 +31,21 @@ function Chip({ label, active, onPress }: ChipProps) {
       }}
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
-      style={[styles.chip, active && styles.chipActive]}
+      style={[
+        styles.chip,
+        size === 'biome' && styles.chipBiome,
+        active && styles.chipActive,
+        active && size === 'biome' && styles.chipBiomeActive,
+      ]}
       hitSlop={8}
     >
-      <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>
+      <Text
+        style={[
+          styles.chipLabel,
+          size === 'biome' && styles.chipLabelBiome,
+          active && styles.chipLabelActive,
+        ]}
+      >
         {label}
       </Text>
     </Pressable>
@@ -46,24 +60,51 @@ export interface LeaderboardFilterState {
   period: 'all-time' | 'week' | 'today';
 }
 
+export interface CampaignLevelOption {
+  id: string;
+  label: string;
+  /** 1..30 numeric index — drives biome grouping + sort order so we
+   *  never inherit lexicographic ordering bugs (L1, L10, L11, L2…). */
+  index: number;
+}
+
+export interface CampaignBiomeOption {
+  id: string;
+  label: string;
+  /** Inclusive 1..30 level range owned by this biome. */
+  fromLevel: number;
+  toLevel: number;
+}
+
 interface Props {
   state: LeaderboardFilterState;
-  campaignLevels: { id: string; label: string }[];
+  /** All 30 campaign levels in numeric order (NOT derived from progress
+   *  store — the bar always renders the full World 1 set, mirroring
+   *  the website). */
+  campaignLevels: CampaignLevelOption[];
+  /** Biome groupings for the level picker (Seed Grove / Moonvine Stream /
+   *  Oracle Bloom). 10 levels each. */
+  campaignBiomes: CampaignBiomeOption[];
   timeTrialModes: { id: string; label: string }[];
   onChange: (next: LeaderboardFilterState) => void;
 }
 
 /**
- * Two-tier filter:
- *   1. iOS-style pill segmented control (Campaign vs Time Trial). Distinct
- *      visual from the gold-underline tab above so the hierarchy reads.
- *   2. Single horizontal chip strip — levels for Campaign, modes for
- *      Time Trial. We hide the strip entirely when there's exactly one
- *      option to keep the empty state clean.
+ * Three-tier filter (Campaign mode) — mirrors the website's
+ * /leaderboards experience:
+ *   1. SegmentedControl: Campaign vs Time Trial
+ *   2. Biome chips: Seed Grove / Moonvine Stream / Oracle Bloom
+ *   3. Level pills: L1..L10 within the active biome (10 at a time)
+ *
+ * The biome is derived from `state.levelId` so deep links + restoration
+ * land on the correct biome automatically. Switching biomes snaps the
+ * level to the biome's first level so the resolved board is always
+ * inside the visible pill row.
  */
 export function LeaderboardFilterBar({
   state,
   campaignLevels,
+  campaignBiomes,
   timeTrialModes,
   onChange,
 }: Props) {
@@ -72,18 +113,68 @@ export function LeaderboardFilterBar({
     { key: 'time-trial' as const, label: 'Time Trial' },
   ];
 
-  const renderStrip = () => {
-    if (state.mode === 'campaign-level') {
-      if (campaignLevels.length === 0) {
-        return (
-          <View style={styles.emptyStrip}>
-            <Text style={styles.emptyStripText}>
-              Clear levels to populate this list.
-            </Text>
-          </View>
-        );
-      }
+  // Derive the active biome from the selected levelId so the row +
+  // pills stay in sync with deep-link / route params.
+  const activeBiome = useMemo(() => {
+    const lvl = campaignLevels.find((l) => l.id === state.levelId);
+    if (!lvl) return campaignBiomes[0];
+    return (
+      campaignBiomes.find(
+        (b) => lvl.index >= b.fromLevel && lvl.index <= b.toLevel,
+      ) ?? campaignBiomes[0]
+    );
+  }, [campaignBiomes, campaignLevels, state.levelId]);
+
+  // Levels visible in the pill row — filtered to the active biome.
+  const visibleLevels = useMemo(() => {
+    if (!activeBiome) return campaignLevels;
+    return campaignLevels.filter(
+      (l) => l.index >= activeBiome.fromLevel && l.index <= activeBiome.toLevel,
+    );
+  }, [campaignLevels, activeBiome]);
+
+  const handleBiomeSelect = (biome: CampaignBiomeOption) => {
+    // Snap to the first level inside this biome (or keep current if it's
+    // already in-range — but the useMemo above already guarantees the
+    // active biome matches the level, so this is always a hop).
+    const firstInBiome = campaignLevels.find(
+      (l) => l.index === biome.fromLevel,
+    );
+    if (!firstInBiome) return;
+    onChange({ ...state, levelId: firstInBiome.id });
+  };
+
+  const renderCampaign = () => {
+    if (campaignLevels.length === 0) {
       return (
+        <View style={styles.emptyStrip}>
+          <Text style={styles.emptyStripText}>
+            Clear levels to populate this list.
+          </Text>
+        </View>
+      );
+    }
+    return (
+      <View style={styles.campaignStack}>
+        {campaignBiomes.length > 1 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.row}
+            accessibilityRole="tablist"
+            accessibilityLabel="Choose biome"
+          >
+            {campaignBiomes.map((biome) => (
+              <Chip
+                key={biome.id}
+                label={biome.label}
+                active={activeBiome?.id === biome.id}
+                onPress={() => handleBiomeSelect(biome)}
+                size="biome"
+              />
+            ))}
+          </ScrollView>
+        ) : null}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -91,7 +182,7 @@ export function LeaderboardFilterBar({
           accessibilityRole="tablist"
           accessibilityLabel="Choose level"
         >
-          {campaignLevels.map((lvl) => (
+          {visibleLevels.map((lvl) => (
             <Chip
               key={lvl.id}
               label={lvl.label}
@@ -100,27 +191,28 @@ export function LeaderboardFilterBar({
             />
           ))}
         </ScrollView>
-      );
-    }
-    return (
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.row}
-        accessibilityRole="tablist"
-        accessibilityLabel="Choose time trial mode"
-      >
-        {timeTrialModes.map((m) => (
-          <Chip
-            key={m.id}
-            label={m.label}
-            active={state.timeTrialMode === m.id}
-            onPress={() => onChange({ ...state, timeTrialMode: m.id })}
-          />
-        ))}
-      </ScrollView>
+      </View>
     );
   };
+
+  const renderTimeTrial = () => (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.row}
+      accessibilityRole="tablist"
+      accessibilityLabel="Choose time trial mode"
+    >
+      {timeTrialModes.map((m) => (
+        <Chip
+          key={m.id}
+          label={m.label}
+          active={state.timeTrialMode === m.id}
+          onPress={() => onChange({ ...state, timeTrialMode: m.id })}
+        />
+      ))}
+    </ScrollView>
+  );
 
   return (
     <View style={styles.container}>
@@ -143,7 +235,7 @@ export function LeaderboardFilterBar({
           }
         }}
       />
-      {renderStrip()}
+      {state.mode === 'campaign-level' ? renderCampaign() : renderTimeTrial()}
     </View>
   );
 }
@@ -153,6 +245,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
     paddingTop: spacing.base,
     paddingBottom: spacing.sm,
+    gap: spacing.sm,
+  },
+  campaignStack: {
     gap: spacing.sm,
   },
   row: {
@@ -169,6 +264,10 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.05)',
     backgroundColor: 'rgba(255, 255, 255, 0.02)',
   },
+  chipBiome: {
+    paddingHorizontal: spacing.base + 2,
+    paddingVertical: 9,
+  },
   chipActive: {
     backgroundColor: colors.surfaceElevated,
     borderColor: colors.accentGold,
@@ -177,11 +276,22 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 0 },
   },
+  chipBiomeActive: {
+    // Stronger glow for biome chips so the hierarchy still reads
+    // when both rows are visible at once.
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+  },
   chipLabel: {
     color: colors.textMuted,
     fontSize: fontSize.sm,
     fontWeight: fontWeight.semibold,
     letterSpacing: letterSpacing.wide,
+  },
+  chipLabelBiome: {
+    fontSize: fontSize.xs,
+    letterSpacing: letterSpacing.wider,
+    textTransform: 'uppercase',
   },
   chipLabelActive: {
     color: colors.text,

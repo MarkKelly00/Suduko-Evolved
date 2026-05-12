@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -15,6 +15,8 @@ import { PremiumButton } from '@/components/ui/PremiumButton';
 import { SegmentedTabs } from '@/components/ui/SegmentedTabs';
 import {
   LeaderboardFilterBar,
+  type CampaignBiomeOption,
+  type CampaignLevelOption,
   type LeaderboardFilterState,
 } from '@/components/leaderboards/LeaderboardFilterBar';
 import {
@@ -22,7 +24,8 @@ import {
   type LeaderboardRowData,
 } from '@/components/leaderboards/LeaderboardRow';
 import { useAuthStore } from '@/game/state/useAuthStore';
-import { useProgressStore } from '@/game/state/useProgressStore';
+import { WORLD_1_LEVELS } from '@/game/content/levels';
+import { WORLD_1_ACTS } from '@/components/map/mapLayout';
 import { leaderboardService } from '@/services/supabase';
 import {
   colors,
@@ -45,25 +48,43 @@ const TIME_TRIAL_MODES = [
   { id: 'daily-sprint', label: 'Daily Sprint' },
 ];
 
+/**
+ * All 30 campaign levels rendered in **numeric** order. We deliberately
+ * don't filter by `completedLevelIds` (the old behaviour) because:
+ *   1. The progress store returns ids as strings, which sort
+ *      lexicographically: L1, L10, L11, L2, … — visible bug.
+ *   2. Players want to see top scores on levels they haven't finished
+ *      yet (matches the website's /leaderboards experience).
+ *
+ * Sourcing from `WORLD_1_LEVELS` (which is built `Array.from({ length: 30 })`)
+ * guarantees ascending numeric order with no sort step.
+ */
+const CAMPAIGN_LEVELS: CampaignLevelOption[] = WORLD_1_LEVELS.map((l) => ({
+  id: l.id,
+  label: `L${l.index}`,
+  index: l.index,
+}));
+
+/**
+ * Biome groupings for the level picker. Mirrors the in-game ACTs from
+ * `mapLayout.WORLD_1_ACTS`. Each biome owns 10 contiguous levels.
+ */
+const CAMPAIGN_BIOMES: CampaignBiomeOption[] = WORLD_1_ACTS.map((act) => ({
+  id: act.id,
+  label: act.title,
+  fromLevel: act.fromLevel,
+  toLevel: act.toLevel,
+}));
+
 export default function LeaderboardScreen() {
   const route = useRoute<RootRouteProp<'Leaderboard'>>();
   const navigation = useNavigation<RootStackNavigation>();
   const me = useAuthStore((s) => s.profile);
-  const completedLevelIds = useProgressStore((s) => s.completedLevelIds);
-
-  const campaignLevels = useMemo(
-    () =>
-      completedLevelIds.map((id) => ({
-        id,
-        label: id.replace('world1-level-', 'L'),
-      })),
-    [completedLevelIds],
-  );
 
   const [activeTab, setActiveTab] = useState<Tab>(route.params?.scope ?? 'global');
   const [filter, setFilter] = useState<LeaderboardFilterState>({
     mode: route.params?.mode ?? 'campaign-level',
-    levelId: route.params?.levelId ?? campaignLevels[0]?.id,
+    levelId: route.params?.levelId ?? CAMPAIGN_LEVELS[0]?.id,
     timeTrialMode: route.params?.timeTrialMode ?? 'sprint-3min',
     period: route.params?.period ?? 'all-time',
   });
@@ -164,7 +185,8 @@ export default function LeaderboardScreen() {
       <SegmentedTabs items={tabs} activeKey={activeTab} onChange={setActiveTab} />
       <LeaderboardFilterBar
         state={filter}
-        campaignLevels={campaignLevels}
+        campaignLevels={CAMPAIGN_LEVELS}
+        campaignBiomes={CAMPAIGN_BIOMES}
         timeTrialModes={TIME_TRIAL_MODES}
         onChange={setFilter}
       />
