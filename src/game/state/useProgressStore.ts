@@ -223,6 +223,23 @@ export const useProgressStore = create<ProgressState>((set, get) => ({
     persist(next);
   },
   recordTimeTrialBest: (modeId, score, time) => {
+    // Defense-in-depth against the (now-fixed) 710/0:00 bug: refuse
+    // any time-trial submission with time<=0. Real gameplay always
+    // produces time > 0, so a zero is a reliable signature of the
+    // bogus client-side completion path that previously polluted
+    // the local store. Pair with the server-side
+    // `CHECK (time_ms > 0)` constraint on time_trial_scores so the
+    // class of bug is structurally impossible at both layers.
+    if (!Number.isFinite(time) || time <= 0) {
+      if (__DEV__) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          '[useProgressStore] rejecting recordTimeTrialBest with time<=0',
+          { modeId, score, time },
+        );
+      }
+      return;
+    }
     const state = get();
     const prev = state.timeTrialBests[modeId];
     const next: TimeTrialBest = prev && prev.score >= score
@@ -238,8 +255,29 @@ export const useProgressStore = create<ProgressState>((set, get) => ({
   hydrate: () => {
     const raw = getStorage().get<unknown>(STORAGE_KEYS.progress, undefined);
     const migrated = migrateProgress(raw);
-    set(migrated);
-    persist(migrated);
+    // One-time on-launch cleanup: strip any time-trial best with
+    // time<=0. Players who installed build 14 or earlier may have
+    // the 710/0:00 bogus entry cached in MMKV, and the merge logic
+    // in restoreFromCloud only adopts cloud values when the cloud
+    // score exceeds local — so a corrupted 710 would never get
+    // overwritten by a real (lower) cloud best. Filtering here
+    // gives every affected device an automatic recovery path on
+    // next launch without requiring sign-out/sign-in.
+    const cleanedBests: typeof migrated.timeTrialBests = {};
+    for (const [modeId, best] of Object.entries(migrated.timeTrialBests)) {
+      if (Number.isFinite(best.time) && best.time > 0) {
+        cleanedBests[modeId] = best;
+      } else if (__DEV__) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          '[useProgressStore.hydrate] dropping corrupted TT best',
+          { modeId, best },
+        );
+      }
+    }
+    const sanitized = { ...migrated, timeTrialBests: cleanedBests };
+    set(sanitized);
+    persist(sanitized);
   },
   reset: () => {
     const def = defaultProgress();
