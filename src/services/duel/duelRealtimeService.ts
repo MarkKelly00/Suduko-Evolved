@@ -112,18 +112,21 @@ export function subscribeInviteAcceptance(
 }
 
 /**
- * Subscribe to participant changes for a room — useful for opponent
- * heartbeat updates (current_score, progress_percent, last_seen_at).
+ * Subscribe to participant changes for a room. Fires on INSERT,
+ * UPDATE and DELETE — important because the lobby needs to see the
+ * SECOND player's row appear via INSERT (UPDATE-only would miss it
+ * entirely, leaving the lobby stuck on the "Connecting…" placeholder).
  */
 export function subscribeParticipants(
   roomId: string,
-  onUpdate: (row: {
+  onChange: (row: {
     user_id: string;
     current_score: number;
     progress_percent: number;
     status: string;
     last_seen_at: string;
     completed_units: unknown;
+    ready_at?: string | null;
   }) => void,
 ): Unsubscribe {
   const supabase = getSupabase();
@@ -133,14 +136,60 @@ export function subscribeParticipants(
     .on(
       'postgres_changes',
       {
-        event: 'UPDATE',
+        event: '*',
         schema: 'public',
         table: 'duel_participants',
         filter: `room_id=eq.${roomId}`,
       },
       (payload) => {
-        if (payload.new)
-          onUpdate(payload.new as Parameters<typeof onUpdate>[0]);
+        const row = (payload.new ?? payload.old) as
+          | Parameters<typeof onChange>[0]
+          | null;
+        if (row) onChange(row);
+      },
+    )
+    .subscribe();
+  return () => detach(channel);
+}
+
+/**
+ * Subscribe to incoming-challenge events for the local player.
+ *
+ * Fires when a row in `challenges` is INSERTed with `opponent_id =
+ * currentUser`. The payload includes mode + level_id / sprint_mode_id
+ * + challenger_id so the banner can render copy + a tap target
+ * without an extra round-trip.
+ *
+ * Mounted once per session in App.tsx after auth hydrates.
+ */
+export function subscribeIncomingChallenges(
+  opponentId: string,
+  onChallenge: (challenge: {
+    id: string;
+    challenger_id: string;
+    opponent_id: string;
+    mode: string;
+    level_id: string | null;
+    sprint_mode_id: string | null;
+    created_at: string;
+  }) => void,
+): Unsubscribe {
+  const supabase = getSupabase();
+  if (!supabase) return () => undefined;
+  const channel = supabase
+    .channel(`challenges_incoming:${opponentId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'challenges',
+        filter: `opponent_id=eq.${opponentId}`,
+      },
+      (payload) => {
+        const row = payload.new as Record<string, unknown> | null;
+        if (!row) return;
+        onChallenge(row as unknown as Parameters<typeof onChallenge>[0]);
       },
     )
     .subscribe();

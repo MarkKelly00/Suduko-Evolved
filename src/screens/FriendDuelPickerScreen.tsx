@@ -44,6 +44,7 @@ export default function FriendDuelPickerScreen() {
   const [loading, setLoading] = useState(true);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -62,6 +63,7 @@ export default function FriendDuelPickerScreen() {
   const onChallenge = async (friendId: string, friendName: string) => {
     if (submittingId) return;
     setSubmittingId(friendId);
+    setError(null);
     try {
       await duelInviteService.createFriendDuel(friendId, route.params.mode);
       hapticsService.success();
@@ -71,8 +73,14 @@ export default function FriendDuelPickerScreen() {
       setSuccess(`Challenge sent to ${friendName}.`);
       setTimeout(() => navigation.goBack(), 700);
     } catch (err) {
-      setSuccess(
-        err instanceof Error ? err.message : 'Could not send challenge.',
+      // Surface the real error rather than swallowing it into the
+      // success toast (the old code did `setSuccess(err.message)` which
+      // rendered errors with a green checkmark — visually misleading).
+      if (__DEV__) console.warn('[FriendDuelPicker.onChallenge] failed:', err);
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Could not send challenge — try again.',
       );
     } finally {
       setSubmittingId(null);
@@ -106,6 +114,11 @@ export default function FriendDuelPickerScreen() {
         {success ? (
           <GlassCard style={styles.toast}>
             <Text style={styles.toastText}>{success}</Text>
+          </GlassCard>
+        ) : null}
+        {error ? (
+          <GlassCard style={[styles.toast, styles.toastError]}>
+            <Text style={[styles.toastText, styles.toastErrorText]}>{error}</Text>
           </GlassCard>
         ) : null}
         <FlatList
@@ -169,11 +182,17 @@ const styles = StyleSheet.create({
   toast: {
     marginBottom: spacing.base,
   },
+  toastError: {
+    borderColor: colors.mistake,
+  },
   toastText: {
     color: colors.success,
     fontSize: fontSize.sm,
     fontWeight: fontWeight.semibold,
     textAlign: 'center',
+  },
+  toastErrorText: {
+    color: colors.mistake,
   },
   list: {
     gap: spacing.xs,

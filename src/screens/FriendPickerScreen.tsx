@@ -15,7 +15,12 @@ import { PremiumButton } from '@/components/ui/PremiumButton';
 import { FriendListItem } from '@/components/friends/FriendListItem';
 import { InlineToast } from '@/components/ui/InlineToast';
 import { useAuthStore } from '@/game/state/useAuthStore';
-import { challengeService, friendService, type Profile } from '@/services/supabase';
+import {
+  challengeService,
+  friendService,
+  leaderboardService,
+  type Profile,
+} from '@/services/supabase';
 import { submitFriendChallengeFired } from '@/game/leaderboards/leaderboardSubmissions';
 import {
   colors,
@@ -34,6 +39,11 @@ export default function FriendPickerScreen() {
   const params = route.params;
 
   const [friends, setFriends] = useState<Profile[]>([]);
+  /** Map of friend.userId → their best score on `params.levelId`.
+   *  Missing entries = they haven't cleared the level (always OK to challenge).
+   *  When `friendBests[id] >= params.challengerAttempt.score` we disable
+   *  the row because the challenge would be dead-on-arrival. */
+  const [friendBests, setFriendBests] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
@@ -42,8 +52,23 @@ export default function FriendPickerScreen() {
   const refresh = useCallback(async () => {
     if (!me) return;
     const list = await friendService.getFriends(me.id);
-    setFriends(list.map((row) => row.profile));
-  }, [me]);
+    const profiles = list.map((row) => row.profile);
+    setFriends(profiles);
+    // Pull the friend leaderboard for this level so we know which
+    // friends already have a higher score than the challenger. The
+    // friend_leaderboard RPC scopes to my friend graph + the level
+    // and returns sorted descending — perfect for this lookup.
+    if (params.mode === 'campaign' && params.levelId) {
+      const rows = await leaderboardService.getFriendLeaderboard(
+        me.id,
+        params.levelId,
+        100,
+      );
+      const map: Record<string, number> = {};
+      for (const r of rows) map[r.user_id] = r.score;
+      setFriendBests(map);
+    }
+  }, [me, params.mode, params.levelId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -86,7 +111,15 @@ export default function FriendPickerScreen() {
         setError('Could not send challenge — try again later.');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not send challenge.');
+      // Surface the actual error so we can diagnose RLS / constraint
+      // failures in TestFlight rather than swallowing them behind a
+      // generic toast.
+      if (__DEV__) console.warn('[FriendPicker.sendChallenge] failed:', err);
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Could not send challenge — try again.',
+      );
     } finally {
       setSubmitting(false);
     }
@@ -144,17 +177,34 @@ export default function FriendPickerScreen() {
             data={friends}
             keyExtractor={(p) => p.id}
             contentContainerStyle={styles.listContent}
-            renderItem={({ item }) => (
-              <FriendListItem
-                profile={item}
-                action={{
-                  label: submitting ? '…' : 'Send',
-                  variant: 'primary',
-                  disabled: submitting,
-                  onPress: () => void sendChallenge(item),
-                }}
-              />
-            )}
+            renderItem={({ item }) => {
+              const friendScore = friendBests[item.id];
+              const alreadyHigher =
+                friendScore != null &&
+                friendScore >= params.challengerAttempt.score;
+              return (
+                <View>
+                  <FriendListItem
+                    profile={item}
+                    action={{
+                      label: alreadyHigher
+                        ? 'Already beat'
+                        : submitting
+                          ? '…'
+                          : 'Send',
+                      variant: alreadyHigher ? 'ghost' : 'primary',
+                      disabled: submitting || alreadyHigher,
+                      onPress: () => void sendChallenge(item),
+                    }}
+                  />
+                  {alreadyHigher ? (
+                    <Text style={styles.alreadyHigherHint}>
+                      {`Already beat your ${params.challengerAttempt.score.toLocaleString()} on this level — set a higher score first.`}
+                    </Text>
+                  ) : null}
+                </View>
+              );
+            }}
           />
         )}
       </View>
@@ -257,5 +307,13 @@ const styles = StyleSheet.create({
   listContent: {
     paddingTop: spacing.sm,
     paddingBottom: spacing.xl,
+  },
+  alreadyHigherHint: {
+    color: colors.textMuted,
+    fontSize: fontSize.xs,
+    fontStyle: 'italic',
+    paddingHorizontal: spacing.base,
+    paddingTop: spacing.xxs,
+    paddingBottom: spacing.sm,
   },
 });

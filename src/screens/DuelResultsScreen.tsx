@@ -94,9 +94,18 @@ export default function DuelResultsScreen() {
     const retryTimer = setTimeout(() => {
       if (!loadedOnceRef.current) setShowRetry(true);
     }, 3000);
+    // Belt-and-braces safety poll: every 5s while the bundle is still
+    // null (initial load failed or first realtime event was dropped),
+    // refresh from scratch. Stops as soon as we have a bundle. This is
+    // cheap (single SELECT) and immune to any future regression that
+    // breaks the realtime subscription path.
+    const poll = setInterval(() => {
+      if (!loadedOnceRef.current) void refresh();
+    }, 5000);
     return () => {
       unsub();
       clearTimeout(retryTimer);
+      clearInterval(poll);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId]);

@@ -16,7 +16,9 @@ import { gameCenterService } from '@/services/gameCenter';
 import { duelRealtimeService } from '@/services/duel';
 import { InviteAcceptedBanner } from '@/components/duel/InviteAcceptedBanner';
 import { UsernameRequiredBanner } from '@/components/profile/UsernameRequiredBanner';
+import { ChallengeReceivedBanner } from '@/components/friends/ChallengeReceivedBanner';
 import { useDuelInviteStore } from '@/game/state/useDuelInviteStore';
+import { useChallengeReceivedStore } from '@/game/state/useChallengeReceivedStore';
 import {
   authService,
   isSupabaseConfigured,
@@ -252,6 +254,37 @@ export default function App() {
     };
   }, [myProfileId]);
 
+  // Listen for incoming challenges aimed at the local player. INSERTs
+  // into `challenges` with `opponent_id = me` fire this callback; we
+  // hydrate the challenger's profile (best-effort) and push a record
+  // into useChallengeReceivedStore — rendered globally by
+  // <ChallengeReceivedBanner /> as a 15s auto-dismissing gold pill.
+  useEffect(() => {
+    if (!myProfileId) return;
+    const unsub = duelRealtimeService.subscribeIncomingChallenges(
+      myProfileId,
+      async (challenge) => {
+        // Best-effort profile lookup. If it fails the banner shows
+        // a generic "A friend" label rather than failing silently.
+        const friend = await profileService.getProfile(challenge.challenger_id);
+        useChallengeReceivedStore.getState().setNotification({
+          challengeId: challenge.id,
+          mode: challenge.mode,
+          levelId: challenge.level_id,
+          sprintModeId: challenge.sprint_mode_id,
+          fromName:
+            friend?.display_name ?? friend?.username ?? 'A friend',
+          fromAvatarUrl: friend?.avatar_url ?? null,
+          receivedAt: Date.now(),
+        });
+      },
+    );
+    return () => {
+      unsub();
+      useChallengeReceivedStore.getState().dismiss();
+    };
+  }, [myProfileId]);
+
   if (!hydrated) return null;
 
   const navTheme = {
@@ -296,6 +329,10 @@ export default function App() {
                 set, and is suppressed on EditProfile / Auth screens so we
                 don't nag users while they're already setting one up. */}
             <UsernameRequiredBanner />
+            {/* In-app notification when a friend sends the local player
+                a challenge (campaign level or time-trial sprint).
+                Auto-dismisses after 15s; tap → Friends → Challenges. */}
+            <ChallengeReceivedBanner />
           </NavigationContainer>
         </SafeAreaProvider>
       </GestureHandlerRootView>

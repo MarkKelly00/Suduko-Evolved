@@ -635,6 +635,23 @@ async function playChallenge(
   row: ChallengeRow,
   navigation: RootStackNavigation,
 ): Promise<void> {
+  try {
+    return await playChallengeInner(row, navigation);
+  } catch (err) {
+    if (__DEV__) console.warn('[playChallenge] failed:', err);
+    Alert.alert(
+      'Could not open challenge',
+      err instanceof Error
+        ? err.message
+        : 'Something went wrong opening that challenge. Try again in a moment.',
+    );
+  }
+}
+
+async function playChallengeInner(
+  row: ChallengeRow,
+  navigation: RootStackNavigation,
+): Promise<void> {
   const { challenge, challenger } = row;
   // Look up the challenger's attempt for the in-game banner.
   const attempts = await challengeService.getChallengeAttempts(challenge.id);
