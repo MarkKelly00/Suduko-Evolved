@@ -31,6 +31,11 @@ interface NotificationPayload {
   mode?: string;
   level_id?: string;
   scope?: string;
+  /** When the recipient is being notified that a friend SENT them a
+   *  direct duel invite (from FriendDuelPicker). The invite code
+   *  drives `redeem_duel_invite` server-side once the tap reaches
+   *  DuelInviteJoinScreen. */
+  invite_code?: string;
   // additional fields are silently ignored
   [k: string]: unknown;
 }
@@ -87,6 +92,15 @@ export function handleNotificationTap(
         // param and uses mark_duel_ready's response instead.
         startAt: '',
       });
+      return;
+    }
+    case 'DuelInviteJoin': {
+      // Friend-direct duel: recipient was notified they have a pending
+      // invite. DuelInviteJoinScreen handles the redeem RPC and the
+      // resulting DuelLobby navigation — same flow that fires when a
+      // sudokuevolved.com/duel/<code> link is tapped.
+      if (typeof data.invite_code !== 'string') break;
+      navigateSafe('DuelInviteJoin', { inviteCode: data.invite_code });
       return;
     }
     case 'Leaderboard': {

@@ -30,9 +30,27 @@ import { hapticsService } from '@/services/haptics/hapticsService';
 import type { RootRouteProp, RootStackNavigation } from '@/app/navigation/routes';
 
 /**
+ * Pull a user-readable message off whatever was thrown. Supabase SDK
+ * errors are POJOs shaped `{ message, details, hint, code }` — not
+ * Error instances. Mirrors the helper used in shareDuelInvite.ts.
+ */
+function describeError(err: unknown, fallback: string): string {
+  if (err instanceof Error) return err.message;
+  if (err && typeof err === 'object') {
+    const obj = err as { message?: unknown; hint?: unknown; details?: unknown };
+    if (typeof obj.message === 'string' && obj.message.length > 0) return obj.message;
+    if (typeof obj.hint === 'string' && obj.hint.length > 0) return obj.hint;
+    if (typeof obj.details === 'string' && obj.details.length > 0) return obj.details;
+  }
+  return fallback;
+}
+
+/**
  * Pick a friend to challenge to a duel. Sends a `create_friend_duel` RPC
- * which materializes a duel_invite row. The friend will see it in their
- * inbox / via realtime; for MVP we don't push-notify yet.
+ * which materializes a duel_invite row. A Postgres trigger then pushes
+ * the opponent a notification ("@friend wants to duel — tap to play");
+ * tapping it deep-links into DuelInviteJoinScreen which calls
+ * `redeem_duel_invite` and drops them into the lobby.
  */
 export default function FriendDuelPickerScreen() {
   const route = useRoute<RootRouteProp<'FriendDuelPicker'>>();
@@ -73,15 +91,14 @@ export default function FriendDuelPickerScreen() {
       setSuccess(`Challenge sent to ${friendName}.`);
       setTimeout(() => navigation.goBack(), 700);
     } catch (err) {
-      // Surface the real error rather than swallowing it into the
-      // success toast (the old code did `setSuccess(err.message)` which
-      // rendered errors with a green checkmark — visually misleading).
+      // Surface the real error. Supabase RPC failures come back as
+      // POJOs (`{ message, details, hint, code }`), not Error
+      // instances — the old `err instanceof Error` check fell through
+      // to the generic toast, masking real failures (e.g. the
+      // gen_random_bytes-in-public-search-path bug that hid here
+      // until we noticed the duel picker was broken).
       if (__DEV__) console.warn('[FriendDuelPicker.onChallenge] failed:', err);
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Could not send challenge — try again.',
-      );
+      setError(describeError(err, 'Could not send challenge — try again.'));
     } finally {
       setSubmittingId(null);
     }
