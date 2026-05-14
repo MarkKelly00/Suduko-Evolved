@@ -44,9 +44,19 @@ export function SegmentedTabs<TKey extends string>({
   const reducedMotion = useSettingsStore((s) => s.reducedMotion);
   const indicatorX = useSharedValue(0);
   const indicatorW = useSharedValue(0);
-  const [layouts, setLayouts] = React.useState<({ x: number; width: number } | null)[]>(
-    () => items.map(() => null),
-  );
+  // Tab (Pressable) layouts — each tab's x + width within the row.
+  // Used to compute the indicator's absolute x.
+  const [tabLayouts, setTabLayouts] = React.useState<
+    ({ x: number; width: number } | null)[]
+  >(() => items.map(() => null));
+  // Label (Text wrapper) layouts — used to size the indicator to the
+  // label's actual visible width, not the cell width. The previous
+  // version sized to the cell, which made the rightmost tab's
+  // underline appear to "leak" past the text (visible asymmetry when
+  // the label was shorter than the cell — e.g. "Challenges" 25% cell).
+  const [labelLayouts, setLabelLayouts] = React.useState<
+    ({ x: number; width: number } | null)[]
+  >(() => items.map(() => null));
 
   const activeIndex = Math.max(
     0,
@@ -54,21 +64,37 @@ export function SegmentedTabs<TKey extends string>({
   );
 
   useEffect(() => {
-    const target = layouts[activeIndex];
-    if (!target) return;
+    const tab = tabLayouts[activeIndex];
+    const label = labelLayouts[activeIndex];
+    if (!tab || !label) return;
     const d = reducedMotion ? 0 : duration.base;
-    indicatorX.value = withTiming(target.x, { duration: d, easing: easing.premium });
-    indicatorW.value = withTiming(target.width, { duration: d, easing: easing.premium });
-  }, [activeIndex, layouts, indicatorX, indicatorW, reducedMotion]);
+    indicatorX.value = withTiming(tab.x + label.x, {
+      duration: d,
+      easing: easing.premium,
+    });
+    indicatorW.value = withTiming(label.width, {
+      duration: d,
+      easing: easing.premium,
+    });
+  }, [activeIndex, tabLayouts, labelLayouts, indicatorX, indicatorW, reducedMotion]);
 
   const indicatorStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: indicatorX.value }],
     width: indicatorW.value,
   }));
 
-  const handleLayout = (i: number) => (e: LayoutChangeEvent) => {
+  const handleTabLayout = (i: number) => (e: LayoutChangeEvent) => {
     const { x, width } = e.nativeEvent.layout;
-    setLayouts((prev) => {
+    setTabLayouts((prev) => {
+      const next = [...prev];
+      next[i] = { x, width };
+      return next;
+    });
+  };
+
+  const handleLabelLayout = (i: number) => (e: LayoutChangeEvent) => {
+    const { x, width } = e.nativeEvent.layout;
+    setLabelLayouts((prev) => {
       const next = [...prev];
       next[i] = { x, width };
       return next;
@@ -91,23 +117,29 @@ export function SegmentedTabs<TKey extends string>({
                 hapticsService.selection();
                 onChange(item.key);
               }}
-              onLayout={handleLayout(i)}
+              onLayout={handleTabLayout(i)}
               style={styles.tab}
               hitSlop={6}
             >
-              <Text
-                style={[
-                  styles.tabLabel,
-                  active && styles.tabLabelActive,
-                ]}
-              >
-                {item.label}
-              </Text>
-              {item.badgeCount != null && item.badgeCount > 0 ? (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{Math.min(99, item.badgeCount)}</Text>
-                </View>
-              ) : null}
+              {/* Inner wrapper sized to text content so the indicator
+                  hugs the label, not the cell. */}
+              <View style={styles.labelWrap} onLayout={handleLabelLayout(i)}>
+                <Text
+                  style={[
+                    styles.tabLabel,
+                    active && styles.tabLabelActive,
+                  ]}
+                >
+                  {item.label}
+                </Text>
+                {item.badgeCount != null && item.badgeCount > 0 ? (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>
+                      {Math.min(99, item.badgeCount)}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
             </Pressable>
           );
         })}
@@ -135,6 +167,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'center',
+    gap: spacing.xs,
+  },
+  labelWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.xs,
   },
   tabLabel: {

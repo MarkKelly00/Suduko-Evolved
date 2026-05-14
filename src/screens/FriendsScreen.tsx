@@ -16,6 +16,7 @@ import { TopBar } from '@/components/ui/TopBar';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { PremiumButton } from '@/components/ui/PremiumButton';
 import { SegmentedTabs } from '@/components/ui/SegmentedTabs';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { FriendListItem } from '@/components/friends/FriendListItem';
 import { ChallengeCard, type ChallengeCardStatus } from '@/components/friends/ChallengeCard';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
@@ -28,6 +29,8 @@ import {
   type Challenge,
   type Friendship,
 } from '@/services/supabase';
+import { duelService, type DuelRoomBundle } from '@/services/duel';
+import { getTimeTrialMode } from '@/game/modes/timeTrial';
 import {
   colors,
   fontSize,
@@ -69,6 +72,10 @@ export default function FriendsScreen() {
   const [challengesInbox, setChallengesInbox] = useState<ChallengeRow[]>([]);
   const [challengesOutgoing, setChallengesOutgoing] = useState<ChallengeRow[]>([]);
   const [challengesCompleted, setChallengesCompleted] = useState<ChallengeRow[]>([]);
+  /** Recent completed duels — surfaced under the "Duels" sub-filter of
+   *  the Challenges tab so users can review past duels alongside
+   *  level-challenge results. */
+  const [recentDuels, setRecentDuels] = useState<DuelRoomBundle[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -81,6 +88,7 @@ export default function FriendsScreen() {
       cIn,
       cOut,
       cDone,
+      duels,
     ] = await Promise.all([
       friendService.getFriends(me.id),
       friendService.getIncomingRequests(),
@@ -88,6 +96,7 @@ export default function FriendsScreen() {
       challengeService.getInbox(),
       challengeService.getOutgoing(),
       challengeService.getCompleted(5),
+      duelService.getRecentDuels(me.id, 8),
     ]);
     setFriends(friendsList);
     setIncoming(incomingList);
@@ -113,6 +122,10 @@ export default function FriendsScreen() {
     setChallengesInbox(enrich(cIn));
     setChallengesOutgoing(enrich(cOut));
     setChallengesCompleted(enrich(cDone));
+    // Filter to completed duels only — the Duels sub-tab shows results,
+    // not lobbies or in-flight rooms. Pre-existing in-flight rooms are
+    // surfaced via the relevant lobby / game screens.
+    setRecentDuels(duels.filter((d) => d.room.status === 'completed'));
   }, [me]);
 
   useFocusEffect(
@@ -210,6 +223,7 @@ export default function FriendsScreen() {
           inbox={challengesInbox}
           outgoing={challengesOutgoing}
           completed={challengesCompleted}
+          duels={recentDuels}
           refreshing={refreshing}
           onRefresh={handleRefresh}
           onPlay={(row) => {
@@ -221,6 +235,9 @@ export default function FriendsScreen() {
             void refresh();
           }}
           onViewResults={(row) => viewChallengeResults(row, me, navigation)}
+          onViewDuel={(roomId) =>
+            navigation.navigate('DuelResults', { roomId })
+          }
           onAddFriends={() => setActiveTab('add')}
         />
       ) : null}
@@ -507,22 +524,27 @@ function AddTab({ me, onChanged }: { me: Profile; onChanged: () => void }) {
   );
 }
 
+type ChallengeKind = 'levels' | 'duels';
+
 function ChallengesTab({
   me,
   inbox,
   outgoing,
   completed,
+  duels,
   refreshing,
   onRefresh,
   onPlay,
   onDecline,
   onViewResults,
+  onViewDuel,
   onAddFriends,
 }: {
   me: Profile;
   inbox: ChallengeRow[];
   outgoing: ChallengeRow[];
   completed: ChallengeRow[];
+  duels: DuelRoomBundle[];
   refreshing: boolean;
   onRefresh: () => void;
   onPlay: (row: ChallengeRow) => void;
@@ -531,9 +553,22 @@ function ChallengesTab({
    *  The handler is async because it has to fetch attempts to build
    *  the ChallengeResult navigation payload. */
   onViewResults: (row: ChallengeRow) => Promise<void>;
+  /** Navigate to DuelResults for a finished duel. */
+  onViewDuel: (roomId: string) => void;
   onAddFriends: () => void;
 }) {
-  if (inbox.length === 0 && outgoing.length === 0 && completed.length === 0) {
+  const [kind, setKind] = useState<ChallengeKind>('levels');
+
+  const hasLevelData =
+    inbox.length > 0 || outgoing.length > 0 || completed.length > 0;
+  const hasDuelData = duels.length > 0;
+  const filterItems = [
+    { key: 'levels' as const, label: 'Level Challenges' },
+    { key: 'duels' as const, label: 'Duels' },
+  ];
+
+  // Cold-start empty state: neither levels nor duels have anything.
+  if (!hasLevelData && !hasDuelData) {
     return (
       <View style={styles.empty}>
         <GlassCard>
@@ -546,6 +581,7 @@ function ChallengesTab({
       </View>
     );
   }
+
   return (
     <FlatList
       data={[]}
@@ -556,66 +592,175 @@ function ChallengesTab({
       }
       ListHeaderComponent={
         <View style={styles.section}>
-          {inbox.length > 0 ? (
-            <View>
-              <SectionLabel>Your turn</SectionLabel>
-              {inbox.map((row) => (
-                <ChallengeCard
-                  key={row.challenge.id}
-                  status={row.challenge.status === 'accepted' ? 'incoming-accepted' : 'incoming-pending'}
-                  challenger={row.challenger}
-                  opponent={row.opponent}
-                  modeLabel={modeLabelFor(row.challenge)}
-                  expiresAt={row.challenge.expires_at}
-                  primaryLabel="Play"
-                  secondaryLabel="Decline"
-                  onPress={() => onPlay(row)}
-                  onSecondary={() => void onDecline(row.challenge.id)}
-                />
-              ))}
-            </View>
-          ) : null}
-          {outgoing.length > 0 ? (
-            <View>
-              <SectionLabel>Waiting on opponent</SectionLabel>
-              {outgoing.map((row) => (
-                <ChallengeCard
-                  key={row.challenge.id}
-                  status="outgoing-pending"
-                  challenger={row.challenger}
-                  opponent={row.opponent}
-                  modeLabel={modeLabelFor(row.challenge)}
-                  expiresAt={row.challenge.expires_at}
-                />
-              ))}
-            </View>
-          ) : null}
-          {completed.length > 0 ? (
-            <View>
-              <SectionLabel>Recent results</SectionLabel>
-              {completed.map((row) => (
-                <ChallengeCard
-                  key={row.challenge.id}
-                  status={
-                    row.challenge.winner_id == null
-                      ? 'completed-draw'
-                      : row.challenge.winner_id === me.id
-                        ? 'completed-won'
-                        : 'completed-lost'
-                  }
-                  challenger={row.challenger}
-                  opponent={row.opponent}
-                  modeLabel={modeLabelFor(row.challenge)}
-                  primaryLabel="View results"
-                  onPress={() => void onViewResults(row)}
-                />
-              ))}
-            </View>
-          ) : null}
+          <View style={styles.kindFilter}>
+            <SegmentedControl
+              items={filterItems}
+              activeKey={kind}
+              onChange={(k) => setKind(k)}
+            />
+          </View>
+          {kind === 'levels' ? (
+            <LevelChallengesSection
+              me={me}
+              inbox={inbox}
+              outgoing={outgoing}
+              completed={completed}
+              onPlay={onPlay}
+              onDecline={onDecline}
+              onViewResults={onViewResults}
+            />
+          ) : (
+            <DuelsSection
+              me={me}
+              duels={duels}
+              onViewDuel={onViewDuel}
+            />
+          )}
         </View>
       }
       renderItem={null}
     />
+  );
+}
+
+function LevelChallengesSection({
+  me,
+  inbox,
+  outgoing,
+  completed,
+  onPlay,
+  onDecline,
+  onViewResults,
+}: {
+  me: Profile;
+  inbox: ChallengeRow[];
+  outgoing: ChallengeRow[];
+  completed: ChallengeRow[];
+  onPlay: (row: ChallengeRow) => void;
+  onDecline: (id: string) => Promise<void>;
+  onViewResults: (row: ChallengeRow) => Promise<void>;
+}) {
+  if (inbox.length === 0 && outgoing.length === 0 && completed.length === 0) {
+    return (
+      <View style={styles.subEmpty}>
+        <Text style={styles.subEmptyText}>
+          {'No level challenges yet — clear a level and challenge a friend.'}
+        </Text>
+      </View>
+    );
+  }
+  return (
+    <>
+      {inbox.length > 0 ? (
+        <View>
+          <SectionLabel>Your turn</SectionLabel>
+          {inbox.map((row) => (
+            <ChallengeCard
+              key={row.challenge.id}
+              status={row.challenge.status === 'accepted' ? 'incoming-accepted' : 'incoming-pending'}
+              challenger={row.challenger}
+              opponent={row.opponent}
+              modeLabel={modeLabelFor(row.challenge)}
+              expiresAt={row.challenge.expires_at}
+              primaryLabel="Play"
+              secondaryLabel="Decline"
+              onPress={() => onPlay(row)}
+              onSecondary={() => void onDecline(row.challenge.id)}
+            />
+          ))}
+        </View>
+      ) : null}
+      {outgoing.length > 0 ? (
+        <View>
+          <SectionLabel>Waiting on opponent</SectionLabel>
+          {outgoing.map((row) => (
+            <ChallengeCard
+              key={row.challenge.id}
+              status="outgoing-pending"
+              challenger={row.challenger}
+              opponent={row.opponent}
+              modeLabel={modeLabelFor(row.challenge)}
+              expiresAt={row.challenge.expires_at}
+            />
+          ))}
+        </View>
+      ) : null}
+      {completed.length > 0 ? (
+        <View>
+          <SectionLabel>Recent results</SectionLabel>
+          {completed.map((row) => (
+            <ChallengeCard
+              key={row.challenge.id}
+              status={
+                row.challenge.winner_id == null
+                  ? 'completed-draw'
+                  : row.challenge.winner_id === me.id
+                    ? 'completed-won'
+                    : 'completed-lost'
+              }
+              challenger={row.challenger}
+              opponent={row.opponent}
+              modeLabel={modeLabelFor(row.challenge)}
+              primaryLabel="View results"
+              onPress={() => void onViewResults(row)}
+            />
+          ))}
+        </View>
+      ) : null}
+    </>
+  );
+}
+
+function DuelsSection({
+  me,
+  duels,
+  onViewDuel,
+}: {
+  me: Profile;
+  duels: DuelRoomBundle[];
+  onViewDuel: (roomId: string) => void;
+}) {
+  if (duels.length === 0) {
+    return (
+      <View style={styles.subEmpty}>
+        <Text style={styles.subEmptyText}>
+          {'No duels yet — tap Time Trial → Challenge friend or share an invite link.'}
+        </Text>
+      </View>
+    );
+  }
+  return (
+    <View>
+      <SectionLabel>Recent duels</SectionLabel>
+      {duels.map((bundle) => {
+        const self = bundle.participants.find((p) => p.user_id === me.id);
+        const opp = bundle.participants.find((p) => p.user_id !== me.id);
+        const challenger = self?.profile ?? null;
+        const opponent = opp?.profile ?? null;
+        const winnerId = bundle.room.winner_id;
+        const status: ChallengeCardStatus =
+          winnerId == null
+            ? 'completed-draw'
+            : winnerId === me.id
+              ? 'completed-won'
+              : 'completed-lost';
+        // Friendly mode label: time-trial modes have a `name` we
+        // can surface; fall back to the raw mode id otherwise.
+        const meta = getTimeTrialMode(bundle.room.mode);
+        const modeLabel = meta?.name ?? bundle.room.mode;
+        return (
+          <ChallengeCard
+            key={bundle.room.id}
+            status={status}
+            challenger={challenger}
+            opponent={opponent}
+            modeLabel={modeLabel}
+            primaryLabel="View results"
+            onPress={() => onViewDuel(bundle.room.id)}
+          />
+        );
+      })}
+    </View>
   );
 }
 
@@ -817,6 +962,26 @@ const styles = StyleSheet.create({
     letterSpacing: letterSpacing.wider,
     marginTop: spacing.base,
     marginBottom: spacing.sm,
+  },
+  kindFilter: {
+    // SegmentedControl already applies horizontal padding via its
+    // own `outer` wrapper, but its lg-sized padding mirrors the
+    // SegmentedTabs above. Cancel that out + give the control a
+    // small vertical breathing room below the gold underline.
+    marginHorizontal: -spacing.lg,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  subEmpty: {
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.base,
+    alignItems: 'center',
+  },
+  subEmptyText: {
+    color: colors.textMuted,
+    fontSize: fontSize.sm,
+    textAlign: 'center',
+    lineHeight: fontSize.sm * 1.4,
   },
   requestRow: {
     gap: spacing.xs,
