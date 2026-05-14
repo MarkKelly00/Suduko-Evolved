@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { Alert, Linking, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Alert, AppState, Linking, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import { ScreenBackground } from '@/components/ui/ScreenBackground';
 import { TopBar } from '@/components/ui/TopBar';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -116,22 +117,67 @@ function SettingsScreen() {
     void gameCenterService.showAchievements();
   };
 
+  // Track the ACTUAL iOS notification permission status so the toggle's
+  // display reflects reality. Previous version showed `notificationPrefs
+  // .enabled` (defaults to true), so a fresh-install user saw the
+  // toggle as ON even though iOS had never been asked — tapping the
+  // toggle then had no visible effect because the user was already
+  // "on" from our perspective. Now: master toggle is visually ON only
+  // when our pref is true AND iOS has granted permission.
+  const [iosPermStatus, setIosPermStatus] = useState<
+    'granted' | 'denied' | 'undetermined' | 'unknown'
+  >('unknown');
+
+  const refreshIosPermStatus = useCallback(async () => {
+    try {
+      const s = await Notifications.getPermissionsAsync();
+      setIosPermStatus(
+        s.status === 'granted'
+          ? 'granted'
+          : s.status === 'denied'
+            ? 'denied'
+            : 'undetermined',
+      );
+    } catch {
+      setIosPermStatus('unknown');
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshIosPermStatus();
+    // Re-check whenever the app comes back to the foreground —
+    // catches the case where the user flipped iOS Settings while
+    // we were backgrounded.
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next === 'active') void refreshIosPermStatus();
+    });
+    return () => sub.remove();
+  }, [refreshIosPermStatus]);
+
   /**
-   * When the user flips the master push toggle ON, we run the iOS
-   * permission flow if it hasn't been asked yet. If iOS has already
-   * denied us, we deep-link to the system Settings page (only path
-   * back to "enabled" once denied).
+   * Master push toggle handler. Three meaningful transitions:
+   *   - OFF → ON (iOS undetermined): show the system permission prompt.
+   *     On grant, flip pref true + register token.
+   *   - OFF → ON (iOS denied):       offer to deep-link to iOS Settings.
+   *   - ON  → OFF:                   flip pref false. Server-side
+   *                                  trigger then short-circuits via
+   *                                  `should_send_push`.
+   *
+   * The OFF → ON (iOS granted) case is "instant re-enable" — no prompt
+   * needed because iOS perms are still on. Just flips our pref.
    */
   const handleToggleMasterPush = async (enabled: boolean) => {
-    settings.setNotificationPref('enabled', enabled);
-    if (!enabled) return;
-    const result = await requestPushPermissions();
-    if (result.granted) {
+    if (!enabled) {
+      settings.setNotificationPref('enabled', false);
+      return;
+    }
+    // User wants ON. Check actual iOS status first.
+    if (iosPermStatus === 'granted') {
+      settings.setNotificationPref('enabled', true);
       void registerForPushNotifications();
       return;
     }
-    if (!result.prompted) {
-      // Already denied at some point. Offer to deep-link.
+    if (iosPermStatus === 'denied') {
       Alert.alert(
         'Enable notifications',
         'Notifications are turned off for Sudoku Evolved in iOS Settings. Open Settings to re-enable?',
@@ -140,10 +186,23 @@ function SettingsScreen() {
           { text: 'Open Settings', onPress: () => void Linking.openSettings() },
         ],
       );
+      return;
     }
+    // undetermined or unknown — fire the iOS prompt.
+    const result = await requestPushPermissions();
+    await refreshIosPermStatus();
+    if (result.granted) {
+      settings.setNotificationPref('enabled', true);
+      void registerForPushNotifications();
+    }
+    // Decline path: leave our pref false (no notifications fire) and
+    // no further nag — iOS won't show the prompt again until the user
+    // re-enables in Settings, which we'll pick up via AppState.
   };
 
-  const masterPushOn = settings.notificationPrefs.enabled;
+  // Master toggle is "on" only when both our pref AND iOS perms agree.
+  const masterPushOn =
+    settings.notificationPrefs.enabled && iosPermStatus === 'granted';
 
   const gcStatusLabel: string = (() => {
     switch (gcStatus) {
@@ -232,6 +291,11 @@ function SettingsScreen() {
             value={masterPushOn}
             onValueChange={(v) => void handleToggleMasterPush(v)}
           />
+          {iosPermStatus === 'denied' ? (
+            <Text style={styles.gcStatus}>
+              {'Disabled in iOS Settings — tap the toggle to re-enable'}
+            </Text>
+          ) : null}
           {masterPushOn ? (
             <View style={styles.subTogglesWrap}>
               <ToggleRow
