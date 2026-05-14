@@ -21,6 +21,7 @@ import {
   leaderboardService,
   type Profile,
 } from '@/services/supabase';
+import { maybePromptForPush } from '@/services/notifications/justInTimePrompt';
 import { submitFriendChallengeFired } from '@/game/leaderboards/leaderboardSubmissions';
 import {
   colors,
@@ -105,6 +106,9 @@ export default function FriendPickerScreen() {
         // Game Center: FRIENDLY_CHALLENGE. Fire-and-forget; the toast
         // and navigation happen regardless of GC ack.
         void submitFriendChallengeFired();
+        // First successful challenge send → just-in-time push prompt.
+        // No-op after the first install-wide ask.
+        void maybePromptForPush('send-campaign-challenge');
         setSuccess(`Challenge sent to @${friend.username ?? 'friend'}`);
         setTimeout(() => navigation.goBack(), 700);
       } else {

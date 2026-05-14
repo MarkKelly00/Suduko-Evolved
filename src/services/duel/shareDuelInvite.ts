@@ -15,6 +15,7 @@
  */
 import { Alert, Share } from 'react-native';
 import { createDuelLink } from './duelInviteService';
+import { maybePromptForPush } from '@/services/notifications/justInTimePrompt';
 
 /**
  * Pull a user-readable message off whatever was thrown. Native `Error`
@@ -74,6 +75,10 @@ export async function shareDuelInviteLink(
       // User cancelled — that's a normal UX path, not a failure. No toast.
       return false;
     }
+    // First successful share → opportune moment for the just-in-time
+    // push-permission prompt ("Get a ping when they accept?"). The
+    // helper is a no-op after the first call across the install.
+    void maybePromptForPush('share-duel-invite');
     opts.onSuccess?.();
     return true;
   } catch (err) {

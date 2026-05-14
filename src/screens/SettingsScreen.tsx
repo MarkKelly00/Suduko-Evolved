@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, Linking, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { ScreenBackground } from '@/components/ui/ScreenBackground';
 import { TopBar } from '@/components/ui/TopBar';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -10,6 +10,10 @@ import {
   gameCenterService,
   isPlatformIOS,
 } from '@/services/gameCenter';
+import {
+  requestPermissionsAsync as requestPushPermissions,
+  registerForPushNotifications,
+} from '@/services/notifications/pushService';
 import {
   colors,
   fontSize,
@@ -112,6 +116,35 @@ function SettingsScreen() {
     void gameCenterService.showAchievements();
   };
 
+  /**
+   * When the user flips the master push toggle ON, we run the iOS
+   * permission flow if it hasn't been asked yet. If iOS has already
+   * denied us, we deep-link to the system Settings page (only path
+   * back to "enabled" once denied).
+   */
+  const handleToggleMasterPush = async (enabled: boolean) => {
+    settings.setNotificationPref('enabled', enabled);
+    if (!enabled) return;
+    const result = await requestPushPermissions();
+    if (result.granted) {
+      void registerForPushNotifications();
+      return;
+    }
+    if (!result.prompted) {
+      // Already denied at some point. Offer to deep-link.
+      Alert.alert(
+        'Enable notifications',
+        'Notifications are turned off for Sudoku Evolved in iOS Settings. Open Settings to re-enable?',
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => void Linking.openSettings() },
+        ],
+      );
+    }
+  };
+
+  const masterPushOn = settings.notificationPrefs.enabled;
+
   const gcStatusLabel: string = (() => {
     switch (gcStatus) {
       case 'connected':
@@ -189,6 +222,50 @@ function SettingsScreen() {
             value={settings.colorblindMode}
             onValueChange={settings.setColorblindMode}
           />
+        </GlassCard>
+
+        <GlassCard style={styles.section}>
+          <Text style={styles.sectionTitle}>Notifications</Text>
+          <ToggleRow
+            label="Push notifications"
+            description="Lock-screen alerts for friend activity"
+            value={masterPushOn}
+            onValueChange={(v) => void handleToggleMasterPush(v)}
+          />
+          {masterPushOn ? (
+            <View style={styles.subTogglesWrap}>
+              <ToggleRow
+                label="Challenges"
+                description="A friend challenges you on a level or sprint"
+                value={settings.notificationPrefs.challenges}
+                onValueChange={(v) => settings.setNotificationPref('challenges', v)}
+              />
+              <ToggleRow
+                label="Friend requests"
+                description="Someone sends you a friend request"
+                value={settings.notificationPrefs.friendRequests}
+                onValueChange={(v) => settings.setNotificationPref('friendRequests', v)}
+              />
+              <ToggleRow
+                label="Score beats"
+                description="A friend beats your best on a level"
+                value={settings.notificationPrefs.scoreBeats}
+                onValueChange={(v) => settings.setNotificationPref('scoreBeats', v)}
+              />
+              <ToggleRow
+                label="Acceptances"
+                description="Friend / challenge / duel acceptances"
+                value={settings.notificationPrefs.acceptances}
+                onValueChange={(v) => settings.setNotificationPref('acceptances', v)}
+              />
+              <ToggleRow
+                label="Duel invites"
+                description="A friend accepts your invite link"
+                value={settings.notificationPrefs.duelInvites}
+                onValueChange={(v) => settings.setNotificationPref('duelInvites', v)}
+              />
+            </View>
+          ) : null}
         </GlassCard>
 
         {isPlatformIOS() && gcStatus !== 'unavailable' ? (
@@ -289,5 +366,11 @@ const styles = StyleSheet.create({
   },
   gcButton: {
     marginTop: spacing.xs,
+  },
+  subTogglesWrap: {
+    paddingLeft: spacing.base,
+    borderLeftWidth: 1,
+    borderLeftColor: colors.divider,
+    marginTop: spacing.xxs,
   },
 });

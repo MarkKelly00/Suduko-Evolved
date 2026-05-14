@@ -58,6 +58,12 @@
           "iosUrlScheme": "com.googleusercontent.apps.115969849864-7pjll3bmkeokh5sf36sbngl31e6bcbm9"
         }
       ],
+      [
+        "expo-notifications",
+        {
+          "color": "#E0B96A"
+        }
+      ],
       "./plugins/with-pod-warnings",
       "./plugins/with-game-center"
     ],

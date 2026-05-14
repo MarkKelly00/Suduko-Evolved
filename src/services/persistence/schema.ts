@@ -95,6 +95,34 @@ export function migrateProgress(raw: unknown): ProgressStoreV1 {
 
 // ----- Settings -----------------------------------------------------------
 
+/**
+ * Per-trigger push notification opt-ins. Mirrors the columns of
+ * `profiles.notification_prefs` (server-side). All default to true so
+ * a fresh install gets the full social loop; the user can mute any
+ * trigger individually in Settings.
+ */
+export interface NotificationPrefs {
+  /** Master gate. When false, NO push notification is sent regardless
+   *  of per-kind toggles below. */
+  enabled: boolean;
+  challenges: boolean;
+  friendRequests: boolean;
+  scoreBeats: boolean;
+  acceptances: boolean;
+  duelInvites: boolean;
+}
+
+export function defaultNotificationPrefs(): NotificationPrefs {
+  return {
+    enabled: true,
+    challenges: true,
+    friendRequests: true,
+    scoreBeats: true,
+    acceptances: true,
+    duelInvites: true,
+  };
+}
+
 export interface SettingsStoreV1 {
   version: 1;
   soundEnabled: boolean;
@@ -108,6 +136,11 @@ export interface SettingsStoreV1 {
    *  flipping it off stops new submissions but doesn't sign the player
    *  out of Game Center (only Apple controls that). */
   gameCenterOptIn: boolean;
+  /** Per-trigger push notification preferences. The store mirrors the
+   *  server's `profiles.notification_prefs` jsonb column so the SQL
+   *  trigger `should_send_push()` can short-circuit without an extra
+   *  round-trip. Changes here sync to cloud on save. */
+  notificationPrefs: NotificationPrefs;
 }
 
 export function defaultSettings(): SettingsStoreV1 {
@@ -119,6 +152,7 @@ export function defaultSettings(): SettingsStoreV1 {
     highContrast: false,
     colorblindMode: false,
     gameCenterOptIn: false,
+    notificationPrefs: defaultNotificationPrefs(),
   };
 }
 
@@ -127,12 +161,31 @@ export function migrateSettings(raw: unknown): SettingsStoreV1 {
   const r = raw as { version?: number; [k: string]: unknown };
   const version = r.version;
   if (version === 1) {
-    return { ...defaultSettings(), ...(raw as Partial<SettingsStoreV1>) };
+    const base = defaultSettings();
+    const partial = raw as Partial<SettingsStoreV1>;
+    // Deep-merge notificationPrefs so older v1 payloads that pre-date
+    // this field still get a sensible default.
+    return {
+      ...base,
+      ...partial,
+      notificationPrefs: {
+        ...base.notificationPrefs,
+        ...(partial.notificationPrefs ?? {}),
+      },
+    };
   }
   if (version === undefined || version === 0) {
     const base = defaultSettings();
     const partial = raw as Partial<SettingsStoreV1>;
-    return { ...base, ...partial, version: 1 };
+    return {
+      ...base,
+      ...partial,
+      version: 1,
+      notificationPrefs: {
+        ...base.notificationPrefs,
+        ...(partial.notificationPrefs ?? {}),
+      },
+    };
   }
   return defaultSettings();
 }

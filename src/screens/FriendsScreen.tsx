@@ -37,6 +37,7 @@ import {
   spacing,
 } from '@/theme';
 import type { FriendsTab, RootRouteProp, RootStackNavigation } from '@/app/navigation/routes';
+import { maybePromptForPush } from '@/services/notifications/justInTimePrompt';
 
 interface FriendRow {
   friendship: Friendship;
@@ -413,6 +414,10 @@ function AddTab({ me, onChanged }: { me: Profile; onChanged: () => void }) {
       await friendService.sendRequest(p.id);
       setStatuses((prev) => ({ ...prev, [p.id]: 'pending_out' }));
       onChanged();
+      // First successful friend-request send → just-in-time push
+      // prompt ("We'll let you know when they accept"). The helper
+      // is a no-op after the first install-wide ask.
+      void maybePromptForPush('send-friend-request');
     } catch (err) {
       Alert.alert(
         'Could not send request',

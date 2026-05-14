@@ -5,6 +5,13 @@ import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { linkingConfig } from '@/app/navigation/deepLinks';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import * as Notifications from 'expo-notifications';
+import {
+  configureForegroundHandler,
+  registerForPushNotifications,
+  clearRegisteredTokenCache,
+} from '@/services/notifications/pushService';
+import { handleNotificationTap } from '@/services/notifications/notificationRouter';
 import { setStorage } from '@/services/persistence/storage';
 import { MMKVStorage } from '@/services/persistence/mmkvStorage';
 import { useSettingsStore } from '@/game/state/useSettingsStore';
@@ -48,7 +55,48 @@ export default function App() {
     // module compiled in, and on opt-out users (it never presents the
     // sign-in sheet from here; only Settings opt-in does that).
     void gameCenterService.initialize();
+    // Configure the OS-level foreground notification handler. This
+    // doesn't request permission — that's done just-in-time. The
+    // handler decides whether to show the system banner when our own
+    // in-app gold banners are already active for the same event.
+    configureForegroundHandler();
     setHydrated(true);
+  }, []);
+
+  // Tap-handler for system notifications. The router translates the
+  // payload's `route` + per-screen params into a `navigationRef.navigate`
+  // call. Also handles the cold-start case: if the app was launched
+  // BY tapping a notification, `getLastNotificationResponseAsync` picks
+  // it up here on first mount.
+  useEffect(() => {
+    let lastHandledId: string | null = null;
+    const subscription = Notifications.addNotificationResponseReceivedListener(
+      (response) => {
+        const id = response.notification.request.identifier;
+        if (id === lastHandledId) return;
+        lastHandledId = id;
+        const data = response.notification.request.content.data as
+          | Record<string, unknown>
+          | null
+          | undefined;
+        handleNotificationTap(data);
+      },
+    );
+    // Cold-start: tapped a notification from the lock screen and the
+    // app launched from cold. The listener above won't fire for that
+    // initial event, so we check explicitly.
+    void Notifications.getLastNotificationResponseAsync().then((r) => {
+      if (!r) return;
+      const id = r.notification.request.identifier;
+      if (id === lastHandledId) return;
+      lastHandledId = id;
+      const data = r.notification.request.content.data as
+        | Record<string, unknown>
+        | null
+        | undefined;
+      handleNotificationTap(data);
+    });
+    return () => subscription.remove();
   }, []);
 
   // Bootstrap auth. Runs once after stores hydrate.
@@ -92,6 +140,11 @@ export default function App() {
             if (__DEV__) console.warn('[App] ensureProfile failed', err);
           }
           auth.setStatus('authenticated');
+          // Register the device's Expo Push token for this user. No-op
+          // if perms aren't granted yet (just-in-time prompt sites
+          // handle the first ask); idempotent if the same token is
+          // already on file.
+          void registerForPushNotifications();
           // Sync. Order matters: localToCloud first (uploads any local
           // bests that beat cloud — handles the guest-migration path
           // for first-time sign-ins), then cloudToLocal (downloads
@@ -129,6 +182,9 @@ export default function App() {
         // into user B's account when B signs in on the same device.
         current.resetToGuest();
         useProgressStore.getState().reset();
+        // Forget the cached "we already registered this token" flag
+        // so the next signed-in user re-upserts under their own user_id.
+        clearRegisteredTokenCache();
         return;
       }
       if (session?.user) {
@@ -164,6 +220,9 @@ export default function App() {
               await runLocalToCloudSync(session.user.id);
               await runCloudToLocalSync(session.user.id);
             })();
+            // Register the Expo Push token under this user's id.
+            // Idempotent — re-upserts the same token if perms grant.
+            void registerForPushNotifications();
           }, 0);
         }
       }
