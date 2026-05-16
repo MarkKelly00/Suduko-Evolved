@@ -278,6 +278,125 @@ re-simulate the run for anti-cheat.
 | Build properties     | `expo-build-properties` (iOS deploy target 15.1)     |
 | Tests                | Jest + `jest-expo` preset                            |
 
+## Game Center
+
+The app ships with **20 achievements** and **6 leaderboards** wired through
+the iOS Game Center module. Catalog definitions live in
+[`src/services/gameCenter/gameCenterIds.ts`](src/services/gameCenter/gameCenterIds.ts)
+(append-only — the IDs are the App Store Connect contract). Icons are
+generated via xAI Grok Imagine; see [Icon generation](#icon-generation)
+below for the regeneration pipeline.
+
+### Achievements
+
+20 achievements totaling 800 points (Apple's per-app cap is 1000, leaving
+200 for future expansion). Tier is derived from point value via
+[`src/game/achievements/tiers.ts`](src/game/achievements/tiers.ts):
+
+- **Bronze** (10–20 pts) — 4 achievements, warm copper-amber finish
+- **Silver** (25 pts) — 7 achievements, moonvine platinum with cyan halo
+- **Gold** (50–75 pts) — 7 achievements, brand-gold (the dominant tier)
+- **Obsidian** (100 pts) — 2 apex achievements, deep navy with bloom-green halo
+
+The in-app `AchievementsScreen` reads progress against count-based
+achievements (stars, crowns, world progress) live from `useProgressStore`,
+and an `AchievementUnlockToast` slides in from the top of the screen the
+first time any achievement crosses 100%.
+
+| ID | Name | Tier | Pts | Category | Description |
+| --- | --- | --- | --- | --- | --- |
+| `first_bloom` | First Bloom | Bronze | 10 | Campaign | Clear your first level in Logic Garden. |
+| `perfect_bloom` | Perfect Bloom | Bronze | 20 | Campaign | Solve a level cleanly enough to earn a crown. |
+| `seed_grove_complete` | Seed Grove Complete | Silver | 25 | Campaign | Clear every level in the Seed Grove biome. |
+| `moonvine_stream_complete` | Moonvine Stream Complete | Silver | 25 | Campaign | Clear every level in the Moonvine Stream biome. |
+| `oracle_bloom_complete` | Oracle Bloom Complete | Gold | 50 | Campaign | Clear every level in the Oracle Bloom Temple biome. |
+| `logic_garden_complete` | Logic Garden Complete | Gold | 75 | Campaign | Clear all 30 levels of Logic Garden. |
+| `star_collector` | Star Collector | Silver | 25 | Campaign | Earn 30 stars in Logic Garden. |
+| `star_harmony` | Star Harmony | Gold | 50 | Campaign | Earn 60 stars in Logic Garden. |
+| `perfect_constellation` | Perfect Constellation | Obsidian | 100 | Campaign | Earn all 90 stars in Logic Garden. |
+| `crowned_logic` | Crowned Logic | Gold | 50 | Campaign | Earn 10 crowns. |
+| `crown_garden` | Crown Garden | Obsidian | 100 | Campaign | Earn all 30 crowns. |
+| `lightning_solve` | Lightning Solve | Silver | 25 | Sprint | Clear a 3-Minute Sprint puzzle. |
+| `perfect_sprint` | Perfect Sprint | Gold | 50 | Sprint | Clear a Sprint with no mistakes and no hints. |
+| `first_duel` | First Duel | Bronze | 10 | Duels | Finish your first online duel. |
+| `logic_rival` | Logic Rival | Silver | 25 | Duels | Win your first online duel. |
+| `perfect_rivalry` | Perfect Rivalry | Gold | 50 | Duels | Win a duel with a crown / perfect solve. |
+| `friendly_challenge` | Friendly Challenge | Silver | 25 | Social | Send a challenge to a friend. |
+| `perfect_harmony` | Perfect Harmony | Gold | 50 | Skill | Complete three or more regions in a single placement. |
+| `no_hints_needed` | No Hints Needed | Silver | 25 | Skill | Clear any level without using hints. |
+| `take_a_breath` | Take a Breath | Bronze | 10 | Mindfulness | Pause mid-puzzle and finish the level when you return. |
+
+### Leaderboards
+
+6 leaderboards spanning Sprint, Duels, and campaign progress. All are
+`Classic (Single)` boards in App Store Connect; the sort order is
+documented in
+[`gameCenterIds.ts`](src/services/gameCenter/gameCenterIds.ts) (high → low
+for scores/counts, low → high for time-to-clear).
+
+| ID | Reference Name | Tier | What it tracks |
+| --- | --- | --- | --- |
+| `sprint_3min_score` | 3-Minute Sprint Score | Silver | High score in a 3-minute Sprint puzzle |
+| `sprint_fastest_clear` | Fastest Sprint Clear | Gold | Fastest time to clear a Sprint (ms) |
+| `duel_wins` | Duel Wins | Gold | Cumulative online duel wins |
+| `duel_best_score` | Best Duel Score | Obsidian | Best score in a single duel |
+| `logic_garden_stars` | Logic Garden Stars | Silver | Total stars earned in campaign (max 90) |
+| `logic_garden_crowns` | Logic Garden Crowns | Gold | Total crowns earned in campaign (max 30) |
+
+### Icon generation
+
+Both achievement and leaderboard icons are generated via the xAI Grok
+Imagine API with a single shared visual language so the Game Center modal
+feels like one product. Per-tile prompts live in:
+
+- [`scripts/achievement-icon-prompts.mjs`](scripts/achievement-icon-prompts.mjs)
+- [`scripts/leaderboard-icon-prompts.mjs`](scripts/leaderboard-icon-prompts.mjs)
+
+Both files share the same chrome template (flat `#121A2A` navy background,
+tier-coloured radial halo, centered glyph at 60-65 % of canvas with equal
+margins for App Store Connect's circular crop, luminous painted
+illustration style, no double-chrome). Editing a `glyph` description and
+re-running with `--id <short_id>` is the cheap iteration path — each
+re-roll is a single API call.
+
+```bash
+# One-time: store your xAI API key (gitignored)
+echo "XAI_API_KEY=xai-..." >> .env
+
+# Regenerate ALL 20 achievement icons (256×256, bundled with the app)
+set -a; source .env; set +a
+node scripts/generate-achievement-icons.mjs
+
+# Re-roll a single achievement
+node scripts/generate-achievement-icons.mjs --id perfect_harmony
+
+# Produce App Store Connect upload versions (1024×1024) by upscaling
+# the in-app 256s. Use --size 512 for a softer 2× upscale if preferred.
+node scripts/prepare-game-center-icons.mjs
+
+# Generate ALL 6 leaderboard icons natively at 1024×1024
+node scripts/generate-leaderboard-icons.mjs
+
+# Re-roll a single leaderboard
+node scripts/generate-leaderboard-icons.mjs --id logic_garden_stars
+```
+
+Output locations:
+
+| Folder | Size | Purpose |
+| --- | --- | --- |
+| `assets/achievements/` | 256 × 256 | Bundled with the app; rendered by `AchievementGlyph` in the in-app gallery + unlock toast |
+| `assets/game-center-achievements/` | 1024 × 1024 | Manually upload to App Store Connect → Game Center → Achievements → Add Localization → Image |
+| `assets/game-center-leaderboards/` | 1024 × 1024 | Manually upload to App Store Connect → Game Center → Leaderboards → Add Localization → Image |
+
+The Grid #2 grid + slicer + normalizer scripts
+([`slice-achievement-icons.mjs`](scripts/slice-achievement-icons.mjs),
+[`normalize-achievement-icons.mjs`](scripts/normalize-achievement-icons.mjs))
+are retained as a fallback pipeline for cases where per-tile API calls
+aren't feasible (offline workflow, batch grid generation, etc.) but the
+per-tile API approach is the recommended path because it eliminates the
+inconsistent-margin issues inherent in slicing a 4×5 grid.
+
 ## Phase status
 
 - **Phase 1 — Scaffolding** ✅ project, deps, tooling, folders.
