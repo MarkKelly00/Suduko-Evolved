@@ -303,28 +303,28 @@ achievements (stars, crowns, world progress) live from `useProgressStore`,
 and an `AchievementUnlockToast` slides in from the top of the screen the
 first time any achievement crosses 100%.
 
-| ID | Name | Tier | Pts | Category | Description |
-| --- | --- | --- | --- | --- | --- |
-| `first_bloom` | First Bloom | Bronze | 10 | Campaign | Clear your first level in Logic Garden. |
-| `perfect_bloom` | Perfect Bloom | Bronze | 20 | Campaign | Solve a level cleanly enough to earn a crown. |
-| `seed_grove_complete` | Seed Grove Complete | Silver | 25 | Campaign | Clear every level in the Seed Grove biome. |
-| `moonvine_stream_complete` | Moonvine Stream Complete | Silver | 25 | Campaign | Clear every level in the Moonvine Stream biome. |
-| `oracle_bloom_complete` | Oracle Bloom Complete | Gold | 50 | Campaign | Clear every level in the Oracle Bloom Temple biome. |
-| `logic_garden_complete` | Logic Garden Complete | Gold | 75 | Campaign | Clear all 30 levels of Logic Garden. |
-| `star_collector` | Star Collector | Silver | 25 | Campaign | Earn 30 stars in Logic Garden. |
-| `star_harmony` | Star Harmony | Gold | 50 | Campaign | Earn 60 stars in Logic Garden. |
-| `perfect_constellation` | Perfect Constellation | Obsidian | 100 | Campaign | Earn all 90 stars in Logic Garden. |
-| `crowned_logic` | Crowned Logic | Gold | 50 | Campaign | Earn 10 crowns. |
-| `crown_garden` | Crown Garden | Obsidian | 100 | Campaign | Earn all 30 crowns. |
-| `lightning_solve` | Lightning Solve | Silver | 25 | Sprint | Clear a 3-Minute Sprint puzzle. |
-| `perfect_sprint` | Perfect Sprint | Gold | 50 | Sprint | Clear a Sprint with no mistakes and no hints. |
-| `first_duel` | First Duel | Bronze | 10 | Duels | Finish your first online duel. |
-| `logic_rival` | Logic Rival | Silver | 25 | Duels | Win your first online duel. |
-| `perfect_rivalry` | Perfect Rivalry | Gold | 50 | Duels | Win a duel with a crown / perfect solve. |
-| `friendly_challenge` | Friendly Challenge | Silver | 25 | Social | Send a challenge to a friend. |
-| `perfect_harmony` | Perfect Harmony | Gold | 50 | Skill | Complete three or more regions in a single placement. |
-| `no_hints_needed` | No Hints Needed | Silver | 25 | Skill | Clear any level without using hints. |
-| `take_a_breath` | Take a Breath | Bronze | 10 | Mindfulness | Pause mid-puzzle and finish the level when you return. |
+| Icon | ID | Name | Tier | Pts | Category | Description |
+| :---: | --- | --- | --- | --- | --- | --- |
+| <img src="assets/achievements/first_bloom.png" width="64" alt="First Bloom"/> | `first_bloom` | First Bloom | Bronze | 10 | Campaign | Clear your first level in Logic Garden. |
+| <img src="assets/achievements/perfect_bloom.png" width="64" alt="Perfect Bloom"/> | `perfect_bloom` | Perfect Bloom | Bronze | 20 | Campaign | Solve a level cleanly enough to earn a crown. |
+| <img src="assets/achievements/seed_grove_complete.png" width="64" alt="Seed Grove Complete"/> | `seed_grove_complete` | Seed Grove Complete | Silver | 25 | Campaign | Clear every level in the Seed Grove biome. |
+| <img src="assets/achievements/moonvine_stream_complete.png" width="64" alt="Moonvine Stream Complete"/> | `moonvine_stream_complete` | Moonvine Stream Complete | Silver | 25 | Campaign | Clear every level in the Moonvine Stream biome. |
+| <img src="assets/achievements/oracle_bloom_complete.png" width="64" alt="Oracle Bloom Complete"/> | `oracle_bloom_complete` | Oracle Bloom Complete | Gold | 50 | Campaign | Clear every level in the Oracle Bloom Temple biome. |
+| <img src="assets/achievements/logic_garden_complete.png" width="64" alt="Logic Garden Complete"/> | `logic_garden_complete` | Logic Garden Complete | Gold | 75 | Campaign | Clear all 30 levels of Logic Garden. |
+| <img src="assets/achievements/star_collector.png" width="64" alt="Star Collector"/> | `star_collector` | Star Collector | Silver | 25 | Campaign | Earn 30 stars in Logic Garden. |
+| <img src="assets/achievements/star_harmony.png" width="64" alt="Star Harmony"/> | `star_harmony` | Star Harmony | Gold | 50 | Campaign | Earn 60 stars in Logic Garden. |
+| <img src="assets/achievements/perfect_constellation.png" width="64" alt="Perfect Constellation"/> | `perfect_constellation` | Perfect Constellation | Obsidian | 100 | Campaign | Earn all 90 stars in Logic Garden. |
+| <img src="assets/achievements/crowned_logic.png" width="64" alt="Crowned Logic"/> | `crowned_logic` | Crowned Logic | Gold | 50 | Campaign | Earn 10 crowns. |
+| <img src="assets/achievements/crown_garden.png" width="64" alt="Crown Garden"/> | `crown_garden` | Crown Garden | Obsidian | 100 | Campaign | Earn all 30 crowns. |
+| <img src="assets/achievements/lightning_solve.png" width="64" alt="Lightning Solve"/> | `lightning_solve` | Lightning Solve | Silver | 25 | Sprint | Clear a 3-Minute Sprint puzzle. |
+| <img src="assets/achievements/perfect_sprint.png" width="64" alt="Perfect Sprint"/> | `perfect_sprint` | Perfect Sprint | Gold | 50 | Sprint | Clear a Sprint with no mistakes and no hints. |
+| <img src="assets/achievements/first_duel.png" width="64" alt="First Duel"/> | `first_duel` | First Duel | Bronze | 10 | Duels | Finish your first online duel. |
+| <img src="assets/achievements/logic_rival.png" width="64" alt="Logic Rival"/> | `logic_rival` | Logic Rival | Silver | 25 | Duels | Win your first online duel. |
+| <img src="assets/achievements/perfect_rivalry.png" width="64" alt="Perfect Rivalry"/> | `perfect_rivalry` | Perfect Rivalry | Gold | 50 | Duels | Win a duel with a crown / perfect solve. |
+| <img src="assets/achievements/friendly_challenge.png" width="64" alt="Friendly Challenge"/> | `friendly_challenge` | Friendly Challenge | Silver | 25 | Social | Send a challenge to a friend. |
+| <img src="assets/achievements/perfect_harmony.png" width="64" alt="Perfect Harmony"/> | `perfect_harmony` | Perfect Harmony | Gold | 50 | Skill | Complete three or more regions in a single placement. |
+| <img src="assets/achievements/no_hints_needed.png" width="64" alt="No Hints Needed"/> | `no_hints_needed` | No Hints Needed | Silver | 25 | Skill | Clear any level without using hints. |
+| <img src="assets/achievements/take_a_breath.png" width="64" alt="Take a Breath"/> | `take_a_breath` | Take a Breath | Bronze | 10 | Mindfulness | Pause mid-puzzle and finish the level when you return. |
 
 ### Leaderboards
 
@@ -334,14 +334,14 @@ documented in
 [`gameCenterIds.ts`](src/services/gameCenter/gameCenterIds.ts) (high → low
 for scores/counts, low → high for time-to-clear).
 
-| ID | Reference Name | Tier | What it tracks |
-| --- | --- | --- | --- |
-| `sprint_3min_score` | 3-Minute Sprint Score | Silver | High score in a 3-minute Sprint puzzle |
-| `sprint_fastest_clear` | Fastest Sprint Clear | Gold | Fastest time to clear a Sprint (ms) |
-| `duel_wins` | Duel Wins | Gold | Cumulative online duel wins |
-| `duel_best_score` | Best Duel Score | Obsidian | Best score in a single duel |
-| `logic_garden_stars` | Logic Garden Stars | Silver | Total stars earned in campaign (max 90) |
-| `logic_garden_crowns` | Logic Garden Crowns | Gold | Total crowns earned in campaign (max 30) |
+| Icon | ID | Reference Name | Tier | What it tracks |
+| :---: | --- | --- | --- | --- |
+| <img src="assets/leaderboards/sprint_3min_score.png" width="64" alt="3-Minute Sprint Score"/> | `sprint_3min_score` | 3-Minute Sprint Score | Silver | High score in a 3-minute Sprint puzzle |
+| <img src="assets/leaderboards/sprint_fastest_clear.png" width="64" alt="Fastest Sprint Clear"/> | `sprint_fastest_clear` | Fastest Sprint Clear | Gold | Fastest time to clear a Sprint (ms) |
+| <img src="assets/leaderboards/duel_wins.png" width="64" alt="Duel Wins"/> | `duel_wins` | Duel Wins | Gold | Cumulative online duel wins |
+| <img src="assets/leaderboards/duel_best_score.png" width="64" alt="Best Duel Score"/> | `duel_best_score` | Best Duel Score | Obsidian | Best score in a single duel |
+| <img src="assets/leaderboards/logic_garden_stars.png" width="64" alt="Logic Garden Stars"/> | `logic_garden_stars` | Logic Garden Stars | Silver | Total stars earned in campaign (max 90) |
+| <img src="assets/leaderboards/logic_garden_crowns.png" width="64" alt="Logic Garden Crowns"/> | `logic_garden_crowns` | Logic Garden Crowns | Gold | Total crowns earned in campaign (max 30) |
 
 ### Icon generation
 
@@ -386,6 +386,7 @@ Output locations:
 | Folder | Size | Purpose |
 | --- | --- | --- |
 | `assets/achievements/` | 256 × 256 | Bundled with the app; rendered by `AchievementGlyph` in the in-app gallery + unlock toast |
+| `assets/leaderboards/` | 256 × 256 | Derived from the 1024s via `scripts/derive-leaderboard-256.mjs`; used by the README catalog + reserved for a future in-app leaderboard surface |
 | `assets/game-center-achievements/` | 1024 × 1024 | Manually upload to App Store Connect → Game Center → Achievements → Add Localization → Image |
 | `assets/game-center-leaderboards/` | 1024 × 1024 | Manually upload to App Store Connect → Game Center → Leaderboards → Add Localization → Image |
 
