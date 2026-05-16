@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, AppState, Linking, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import * as Notifications from 'expo-notifications';
 import { ScreenBackground } from '@/components/ui/ScreenBackground';
 import { TopBar } from '@/components/ui/TopBar';
@@ -7,6 +8,7 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { PremiumButton } from '@/components/ui/PremiumButton';
 import { useSettingsStore } from '@/game/state/useSettingsStore';
 import { useProgressStore } from '@/game/state/useProgressStore';
+import type { RootStackNavigation } from '@/app/navigation/routes';
 import {
   gameCenterService,
   isPlatformIOS,
@@ -55,6 +57,7 @@ function ToggleRow({ label, description, value, onValueChange }: ToggleRowProps)
 }
 
 function SettingsScreen() {
+  const navigation = useNavigation<RootStackNavigation>();
   const settings = useSettingsStore();
   const resetAll = useSettingsStore((s) => s.resetAll);
   const progressReset = useProgressStore((s) => s.reset);
@@ -332,6 +335,17 @@ function SettingsScreen() {
           ) : null}
         </GlassCard>
 
+        <GlassCard style={styles.section}>
+          <Text style={styles.sectionTitle}>Achievements</Text>
+          <PremiumButton
+            label="View achievements"
+            variant="secondary"
+            compact
+            onPress={() => navigation.navigate('Achievements')}
+            style={styles.gcButton}
+          />
+        </GlassCard>
+
         {isPlatformIOS() && gcStatus !== 'unavailable' ? (
           <GlassCard style={styles.section}>
             <Text style={styles.sectionTitle}>Game Center</Text>
@@ -351,7 +365,7 @@ function SettingsScreen() {
               style={styles.gcButton}
             />
             <PremiumButton
-              label="Show achievements"
+              label="View in Game Center"
               variant="secondary"
               compact
               onPress={handleShowAchievements}

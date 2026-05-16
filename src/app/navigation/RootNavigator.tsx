@@ -8,6 +8,7 @@ import TimeTrialScreen from '@/screens/TimeTrialScreen';
 import TimeTrialGameScreen from '@/screens/TimeTrialGameScreen';
 import ProfileScreen from '@/screens/ProfileScreen';
 import SettingsScreen from '@/screens/SettingsScreen';
+import AchievementsScreen from '@/screens/AchievementsScreen';
 import AuthScreen from '@/screens/AuthScreen';
 import EditProfileScreen from '@/screens/EditProfileScreen';
 import AvatarCropScreen from '@/screens/AvatarCropScreen';
@@ -57,6 +58,11 @@ export function RootNavigator() {
       />
       <Stack.Screen name="Profile" component={ProfileScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
+      <Stack.Screen
+        name="Achievements"
+        component={AchievementsScreen}
+        options={{ animation: 'slide_from_right' }}
+      />
 
       {/* Auth + Profile editing */}
       <Stack.Screen

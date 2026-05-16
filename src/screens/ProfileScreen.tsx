@@ -125,6 +125,17 @@ function ProfileScreen() {
           </View>
         </GlassCard>
 
+        <GlassCard style={styles.card}>
+          <Text style={styles.sectionTitle}>Achievements</Text>
+          <PremiumButton
+            label="View achievements"
+            variant="secondary"
+            compact
+            onPress={() => navigation.navigate('Achievements')}
+            style={styles.gcButton}
+          />
+        </GlassCard>
+
         {gcReady ? (
           <GlassCard style={styles.card}>
             <Text style={styles.sectionTitle}>Game Center</Text>
@@ -143,7 +154,7 @@ function ProfileScreen() {
               style={styles.gcButton}
             />
             <PremiumButton
-              label="View achievements"
+              label="View in Game Center"
               variant="secondary"
               compact
               onPress={() => void gameCenterService.showAchievements()}

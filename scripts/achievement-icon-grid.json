@@ -1,0 +1,13 @@
+{
+  "cols": 4,
+  "rows": 5,
+  "tilePx": 512,
+  "outputPx": 256,
+  "ids": [
+    "first_bloom", "perfect_bloom", "seed_grove_complete", "moonvine_stream_complete",
+    "oracle_bloom_complete", "logic_garden_complete", "star_collector", "star_harmony",
+    "perfect_constellation", "crowned_logic", "crown_garden", "perfect_harmony",
+    "lightning_solve", "perfect_sprint", "first_duel", "logic_rival",
+    "perfect_rivalry", "friendly_challenge", "no_hints_needed", "take_a_breath"
+  ]
+}

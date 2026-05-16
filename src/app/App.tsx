@@ -24,6 +24,7 @@ import { duelRealtimeService } from '@/services/duel';
 import { InviteAcceptedBanner } from '@/components/duel/InviteAcceptedBanner';
 import { UsernameRequiredBanner } from '@/components/profile/UsernameRequiredBanner';
 import { ChallengeReceivedBanner } from '@/components/friends/ChallengeReceivedBanner';
+import { AchievementUnlockToast } from '@/components/achievements/AchievementUnlockToast';
 import { useDuelInviteStore } from '@/game/state/useDuelInviteStore';
 import { useChallengeReceivedStore } from '@/game/state/useChallengeReceivedStore';
 import {
@@ -392,6 +393,11 @@ export default function App() {
                 a challenge (campaign level or time-trial sprint).
                 Auto-dismisses after 15s; tap → Friends → Challenges. */}
             <ChallengeReceivedBanner />
+            {/* Animated top-of-screen toast when a Game Center achievement
+                first hits 100%. Reads the queue from
+                useAchievementToastStore (pushed by reportAchievementsWithProgress).
+                Tap → Achievements gallery. */}
+            <AchievementUnlockToast />
           </NavigationContainer>
         </SafeAreaProvider>
       </GestureHandlerRootView>

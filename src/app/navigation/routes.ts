@@ -97,6 +97,7 @@ export type RootStackParamList = {
   TimeTrialGame: { modeId: string; challengeContext?: ChallengeContext };
   Profile: undefined;
   Settings: undefined;
+  Achievements: undefined;
 
   Auth: { contextSubtitle?: string } | undefined;
   EditProfile: undefined;

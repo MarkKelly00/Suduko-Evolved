@@ -41,6 +41,9 @@ yarn-error.*
 # Jest
 coverage/
 
+# Achievement-icon normalizer backups (local-only originals)
+assets/achievements/.normalize-backup/
+
 # IDE
 .vscode/
 .idea/

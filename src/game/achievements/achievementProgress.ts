@@ -26,6 +26,7 @@
  */
 
 import { getStorage } from '@/services/persistence/storage';
+import { useAchievementToastStore } from '@/game/state/useAchievementToastStore';
 import {
   gameCenterService,
   type AchievementSubmission,
@@ -87,11 +88,15 @@ export async function reportAchievementsWithProgress(
   const outcomes = await gameCenterService.reportAchievements(survivors);
 
   // Mark any successfully-delivered 100% submissions as reported so
-  // future calls skip them.
+  // future calls skip them. Also enqueue the in-app unlock toast — this
+  // fires exactly once per achievement (the next reportAchievements call
+  // for the same ID is dropped earlier by isReported()), so the toast
+  // store can't replay yesterday's unlocks across launches.
   outcomes.forEach((outcome, i) => {
     const submission = survivors[i]!;
     if (outcome.delivered && submission.percentComplete >= 100) {
       markReported(submission.achievementId);
+      useAchievementToastStore.getState().enqueue(submission.achievementId);
     }
   });
 

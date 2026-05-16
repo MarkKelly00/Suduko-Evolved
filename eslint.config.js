@@ -13,6 +13,7 @@ module.exports = [
       'web-build/**',
       'coverage/**',
       'supabase/functions/**',
+      'scripts/**',
       'babel.config.js',
       'metro.config.js',
       'jest.config.js',
