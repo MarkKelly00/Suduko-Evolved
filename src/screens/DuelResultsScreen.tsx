@@ -134,6 +134,36 @@ export default function DuelResultsScreen() {
     };
   }, [bundle, me]);
 
+  // Game Center submission ref + effect MUST be declared at the top
+  // level (before any early return) — Rules of Hooks. Previously these
+  // sat after the `if (!bundle) return spinner;` block, which meant
+  // the hook count changed on the bundle-null → bundle-populated
+  // transition. That's a latent crash that only surfaces NOW because
+  // the prior infinite-spinner bug kept bundle null forever; once the
+  // fallback fetch reliably populates the bundle, the hook-count
+  // mismatch trips React's `useState` ordering check and surfaces as
+  // "Rendered more hooks than during the previous render."
+  const gcFiredRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!bundle || !me) return;
+    const isComplete = bundle.room.status === 'completed';
+    if (!isComplete) return;
+    if (gcFiredRef.current === bundle.room.id) return;
+    const myAttempt = bundle.attempts.find((a) => a.user_id === me.id);
+    if (!myAttempt) return;
+    gcFiredRef.current = bundle.room.id;
+    const isWinner = bundle.room.winner_id === me.id;
+    const cumulativeWins = isWinner
+      ? recordDuelWin(bundle.room.id)
+      : getDuelWinsCount();
+    void submitDuelResult({
+      score: myAttempt.score,
+      won: isWinner,
+      perfect: myAttempt.crown === true,
+      cumulativeWins,
+    });
+  }, [bundle, me]);
+
   if (!bundle) {
     return (
       <ScreenBackground>
@@ -185,30 +215,9 @@ export default function DuelResultsScreen() {
   const isComplete = bundle.room.status === 'completed';
   const winnerId = bundle.room.winner_id;
   const isWinner = me != null && winnerId === me.id;
-
-  // Game Center submission. Fires once per room, the moment we observe
-  // status==='completed' AND we have our own attempt to read. The
-  // realtime subscription may re-fire `refresh()` multiple times, so
-  // the ref guard prevents double-submits on the same room. Apple's
-  // GameKit dedupe is also idempotent, so even if it slipped past
-  // we'd be OK — the ref is purely a network-saver.
-  const gcFiredRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!isComplete || !me) return;
-    if (gcFiredRef.current === bundle.room.id) return;
-    const myAttempt = bundle.attempts.find((a) => a.user_id === me.id);
-    if (!myAttempt) return;
-    gcFiredRef.current = bundle.room.id;
-    const cumulativeWins = isWinner
-      ? recordDuelWin(bundle.room.id)
-      : getDuelWinsCount();
-    void submitDuelResult({
-      score: myAttempt.score,
-      won: isWinner,
-      perfect: myAttempt.crown === true,
-      cumulativeWins,
-    });
-  }, [isComplete, isWinner, me, bundle.room.id, bundle.attempts]);
+  // Note: Game Center submission useRef + useEffect are declared
+  // higher up (before the `if (!bundle)` early-return) — required by
+  // Rules of Hooks, since the hook count must match across renders.
   const isDraw = isComplete && winnerId == null && bundle.attempts.length === 2;
   const opponentMissing = isComplete && bundle.attempts.length < 2;
   const waitingForOpponent = !isComplete && myAttempt && !opponentAttempt;
