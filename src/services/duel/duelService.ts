@@ -16,12 +16,45 @@ export interface DuelRoomBundle {
   attempts: DuelAttempt[];
 }
 
-export async function getDuelRoom(
+/** Detailed result so callers can distinguish "no row" from "RLS / network /
+ *  PostgREST error" and surface a useful message on the spinner-screens
+ *  that have plagued us across builds. */
+export interface DuelRoomResult {
+  bundle: DuelRoomBundle | null;
+  /** When the fetch failed entirely, this carries the error message
+   *  for on-device diagnostic display. */
+  error: string | null;
+  /** Which read path produced the bundle. Helps future regressions: if
+   *  'fallback' is firing, the nested PostgREST query is broken
+   *  again. */
+  source: 'nested' | 'fallback' | 'none';
+}
+
+/**
+ * Fetch the full duel-room bundle (room + participants + attempts).
+ *
+ * Two-tier strategy:
+ *   1. Try the nested PostgREST select (cheap, one round-trip).
+ *   2. If that errors OR returns null when a row clearly exists, fall
+ *      back to three parallel single-table queries and assemble the
+ *      bundle client-side.
+ *
+ * The fallback exists because we've seen the nested path silently fail
+ * in production despite RLS being verified-correct and the data
+ * verified-present — most likely a PostgREST schema-cache hiccup or a
+ * network blip on the embedded resolver. Splitting into discrete
+ * queries lets us localise WHICH one fails.
+ */
+export async function getDuelRoomDetailed(
   roomId: string,
-): Promise<DuelRoomBundle | null> {
+): Promise<DuelRoomResult> {
   const supabase = getSupabase();
-  if (!supabase) return null;
-  const { data, error } = await supabase
+  if (!supabase) {
+    return { bundle: null, error: 'Supabase not configured', source: 'none' };
+  }
+
+  // ── Path 1: nested select ─────────────────────────────────────────────
+  const nested = await supabase
     .from('duel_rooms')
     .select(
       `*,
@@ -30,25 +63,89 @@ export async function getDuelRoom(
     )
     .eq('id', roomId)
     .maybeSingle();
-  if (error) {
-    if (__DEV__) console.warn('[duelService.getDuelRoom]', error.message);
-    return null;
+  if (!nested.error && nested.data) {
+    type Joined = DuelRoom & {
+      participants: (DuelParticipant & { profile: Profile | null })[];
+      attempts: DuelAttempt[];
+    };
+    const joined = nested.data as unknown as Joined;
+    return {
+      bundle: {
+        room: {
+          ...joined,
+          participants: undefined as never,
+          attempts: undefined as never,
+        } as DuelRoom,
+        participants: joined.participants ?? [],
+        attempts: joined.attempts ?? [],
+      },
+      error: null,
+      source: 'nested',
+    };
   }
-  if (!data) return null;
-  type Joined = DuelRoom & {
-    participants: (DuelParticipant & { profile: Profile | null })[];
-    attempts: DuelAttempt[];
-  };
-  const joined = data as unknown as Joined;
+  if (__DEV__ && nested.error) {
+    console.warn('[duelService.getDuelRoom] nested failed:', nested.error);
+  }
+
+  // ── Path 2: fall back to three discrete queries in parallel ──────────
+  const [roomRes, partsRes, attemptsRes] = await Promise.all([
+    supabase.from('duel_rooms').select('*').eq('id', roomId).maybeSingle(),
+    supabase
+      .from('duel_participants')
+      .select('*')
+      .eq('room_id', roomId),
+    supabase.from('duel_attempts').select('*').eq('room_id', roomId),
+  ]);
+
+  if (roomRes.error || !roomRes.data) {
+    const msg = nested.error?.message
+      ?? roomRes.error?.message
+      ?? 'Room not found';
+    if (__DEV__) console.warn('[duelService.getDuelRoom] room fallback failed:', msg);
+    return { bundle: null, error: msg, source: 'none' };
+  }
+
+  // Hydrate participant profiles separately (the embed inside the nested
+  // failed; the FK join via duel_participants→profiles works on its own
+  // table, but we already separated the parts call, so we fetch the
+  // profiles by id here).
+  const participantsRows = (partsRes.data ?? []) as DuelParticipant[];
+  const profileIds = Array.from(new Set(participantsRows.map((p) => p.user_id)));
+  let profilesById = new Map<string, Profile>();
+  if (profileIds.length > 0) {
+    const profilesRes = await supabase
+      .from('profiles')
+      .select('*')
+      .in('id', profileIds);
+    if (!profilesRes.error && profilesRes.data) {
+      for (const p of profilesRes.data as Profile[]) {
+        profilesById.set(p.id, p);
+      }
+    }
+  }
+
+  const participants = participantsRows.map((p) => ({
+    ...p,
+    profile: profilesById.get(p.user_id) ?? null,
+  }));
+
   return {
-    room: {
-      ...joined,
-      participants: undefined as never,
-      attempts: undefined as never,
-    } as DuelRoom,
-    participants: joined.participants ?? [],
-    attempts: joined.attempts ?? [],
+    bundle: {
+      room: roomRes.data as DuelRoom,
+      participants,
+      attempts: (attemptsRes.data ?? []) as DuelAttempt[],
+    },
+    error: null,
+    source: 'fallback',
   };
+}
+
+/** Back-compat shim: callers that only need the bundle (no diagnostics). */
+export async function getDuelRoom(
+  roomId: string,
+): Promise<DuelRoomBundle | null> {
+  const result = await getDuelRoomDetailed(roomId);
+  return result.bundle;
 }
 
 export async function getRecentDuels(

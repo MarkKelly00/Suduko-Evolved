@@ -53,35 +53,44 @@ export default function DuelResultsScreen() {
   const [friendStatus, setFriendStatus] = useState<
     'none' | 'pending_in' | 'pending_out' | 'accepted' | 'blocked'
   >('none');
-  // Three defensive guards against the "infinite spinner" failure
-  // mode users reported (data is in cloud, but the screen never
-  // resolves):
+  // Defensive guards against the "infinite spinner" failure mode:
   //   1. loadedOnceRef — once we have a non-null bundle, future
   //      transient null returns from refresh() do NOT reset bundle.
-  //      Prevents a realtime-driven refetch failure (network blip,
-  //      RLS hiccup) from blanking a successfully-loaded screen.
-  //   2. showRetry — after 3s with no bundle, expose a manual "Try
-  //      again" button so the user is never stranded.
-  //   3. __DEV__ console.warn on the load path so future failures
-  //      are diagnosable without code changes.
+  //   2. showRetry — after 3s with no bundle, expose "Try again".
+  //   3. lastErrorMessage — surface the actual fetch error on-device
+  //      so we can diagnose remotely rather than relying on __DEV__.
+  //   4. attemptsCount — visible on the retry card so we can see the
+  //      poll is firing.
   const loadedOnceRef = useRef(false);
   const [showRetry, setShowRetry] = useState(false);
+  const [lastErrorMessage, setLastErrorMessage] = useState<string | null>(null);
+  const [lastSource, setLastSource] = useState<'nested' | 'fallback' | 'none' | null>(null);
+  const attemptsCountRef = useRef(0);
+  const [attemptsCount, setAttemptsCount] = useState(0);
 
   const refresh = async () => {
+    attemptsCountRef.current += 1;
+    setAttemptsCount(attemptsCountRef.current);
     try {
-      const b = await duelService.getDuelRoom(roomId);
-      if (b) {
+      const result = await duelService.getDuelRoomDetailed(roomId);
+      setLastSource(result.source);
+      if (result.bundle) {
         loadedOnceRef.current = true;
-        setBundle(b);
-      } else if (__DEV__) {
+        setBundle(result.bundle);
+        setLastErrorMessage(null);
+        return;
+      }
+      // No bundle. Stash the error so it shows on the retry card.
+      setLastErrorMessage(result.error ?? 'No data returned');
+      if (__DEV__) {
         console.warn(
-          '[DuelResultsScreen] getDuelRoom returned null',
-          { roomId, loadedOnce: loadedOnceRef.current },
+          '[DuelResultsScreen] getDuelRoom returned no bundle',
+          { roomId, error: result.error, source: result.source },
         );
       }
-      // Subsequent null returns AFTER a successful load are silently
-      // ignored — see comment block above.
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setLastErrorMessage(msg);
       if (__DEV__) console.warn('[DuelResultsScreen] refresh threw:', err);
     }
   };
@@ -136,6 +145,14 @@ export default function DuelResultsScreen() {
               <Text style={styles.retryHint}>
                 Taking longer than usual to load.
               </Text>
+              {lastErrorMessage ? (
+                <Text style={styles.retryError} numberOfLines={4}>
+                  {lastErrorMessage}
+                </Text>
+              ) : null}
+              <Text style={styles.retryMeta}>
+                {`Tried ${attemptsCount}x · path: ${lastSource ?? '—'} · room: ${roomId.slice(0, 8)}…`}
+              </Text>
               <PremiumButton
                 label="Try again"
                 variant="secondary"
@@ -144,6 +161,12 @@ export default function DuelResultsScreen() {
                   setShowRetry(false);
                   void refresh();
                 }}
+              />
+              <PremiumButton
+                label="Back to Friends"
+                variant="ghost"
+                compact
+                onPress={() => navigation.replace('Friends', { initialTab: 'challenges' })}
               />
             </View>
           ) : null}
@@ -382,6 +405,19 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: fontSize.sm,
     textAlign: 'center',
+  },
+  retryError: {
+    color: colors.mistake,
+    fontSize: fontSize.xs,
+    textAlign: 'center',
+    fontStyle: 'italic',
+    maxWidth: 320,
+  },
+  retryMeta: {
+    color: colors.textDim,
+    fontSize: 10,
+    textAlign: 'center',
+    fontFamily: 'Courier',
   },
   banner: {
     alignItems: 'center',
