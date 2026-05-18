@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 
@@ -9,9 +9,7 @@ import { PremiumButton } from '@/components/ui/PremiumButton';
 import { TIME_TRIAL_MODES } from '@/game/modes/timeTrial';
 import { DEFAULT_DUEL_MODE_ID } from '@/game/modes/duel';
 import { useProgressStore } from '@/game/state/useProgressStore';
-import { useAuthStore } from '@/game/state/useAuthStore';
 import { useAuthGate } from '@/components/auth/AuthGate';
-import { duelService } from '@/services/duel';
 import { shareDuelInviteLink } from '@/services/duel/shareDuelInvite';
 import {
   colors,
@@ -23,50 +21,27 @@ import {
 } from '@/theme';
 import { formatDuration } from '@/utils/formatTime';
 import type { RootStackNavigation } from '@/app/navigation/routes';
-import type { DuelAttempt, DuelParticipant, DuelRoom } from '@/services/duel';
-import type { Profile } from '@/services/supabase/supabaseTypes';
 
 /**
- * Time Trial Hub. Five sections (top → bottom):
+ * Time Trial Hub. Action-oriented — every section here helps the
+ * player START a duel or sprint. Duel HISTORY (past results, rematch
+ * paths) lives in Friends → Challenges → Duels (the canonical home),
+ * reachable via the slim "View duel history →" link below.
  *
+ * Sections (top → bottom):
  *   1. SOLO SPRINT — guest-allowed, picks between 3-Minute and Daily.
  *   2. ONLINE DUEL — auth-gated, drops into matchmaking.
  *   3. CHALLENGE FRIEND — auth-gated, opens FriendDuelPicker.
- *   4. INVITE LINK — auth-gated, creates a share URL via create_duel_link.
- *   5. RECENT DUELS — last 3 finished duels, deep-link to results.
- *   6. LEADERBOARD shortcut.
+ *   4. INVITE LINK — auth-gated, creates a share URL.
+ *   5. LEADERBOARD shortcut.
  *
- * Solo flow remains exactly as it was — `navigation.navigate('TimeTrialGame',
- * { modeId })`. Nothing about guest play changes.
+ * (Previously hosted a "RECENT DUELS" inline list; removed in favour
+ * of the deep link so the screen stays focused on action.)
  */
 function TimeTrialScreen() {
   const navigation = useNavigation<RootStackNavigation>();
   const requireAuth = useAuthGate();
-  const me = useAuthStore((s) => s.profile);
   const bests = useProgressStore((s) => s.timeTrialBests);
-  const [recent, setRecent] = useState<
-    {
-      room: DuelRoom;
-      participants: (DuelParticipant & { profile: Profile | null })[];
-      attempts: DuelAttempt[];
-    }[]
-  >([]);
-
-  useEffect(() => {
-    if (!me) {
-      setRecent([]);
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      const list = await duelService.getRecentDuels(me.id, 3);
-      if (!cancelled) setRecent(list);
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [me?.id]);
 
   const onSoloStart = (modeId: string) => {
     navigation.navigate('TimeTrialGame', { modeId });
@@ -181,26 +156,27 @@ function TimeTrialScreen() {
           onPress={onInviteLink}
         />
 
-        {/* ----- Recent ----- */}
-        {recent.length > 0 ? (
-          <>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionLabel}>RECENT DUELS</Text>
-            </View>
-            {recent.map((r) => (
-              <RecentRow
-                key={r.room.id}
-                room={r.room}
-                participants={r.participants}
-                attempts={r.attempts}
-                myUserId={me?.id ?? null}
-                onPress={() =>
-                  navigation.navigate('DuelResults', { roomId: r.room.id })
-                }
-              />
-            ))}
-          </>
-        ) : null}
+        {/* Slim deep-link to the canonical duel-history home. Replaces
+            the old inline 3-row Recent Duels list — that was history
+            data on an action-focused screen. Friends → Challenges →
+            Duels is one tap away and surfaces the full set. */}
+        <Pressable
+          onPress={() =>
+            navigation.navigate('Friends', {
+              initialTab: 'challenges',
+              initialChallengeKind: 'duels',
+            })
+          }
+          hitSlop={8}
+          accessibilityRole="link"
+          style={({ pressed }) => [
+            styles.historyLink,
+            pressed && styles.historyLinkPressed,
+          ]}
+        >
+          <Text style={styles.historyLinkText}>View duel history</Text>
+          <Text style={styles.historyLinkArrow}>{'→'}</Text>
+        </Pressable>
 
         {/* ----- Leaderboard shortcut ----- */}
         <View style={styles.sectionHeader}>
@@ -248,40 +224,6 @@ function DuelCard({ eyebrow, title, body, ctaLabel, accent, onPress }: DuelCardP
         style={styles.cta}
       />
     </GlassCard>
-  );
-}
-
-interface RecentRowProps {
-  room: DuelRoom;
-  participants: (DuelParticipant & { profile: Profile | null })[];
-  attempts: DuelAttempt[];
-  myUserId: string | null;
-  onPress: () => void;
-}
-function RecentRow({ room, participants, attempts, myUserId, onPress }: RecentRowProps) {
-  const opponent = participants.find((p) => p.user_id !== myUserId);
-  const myAttempt = attempts.find((a) => a.user_id === myUserId);
-  const won = myUserId != null && room.winner_id === myUserId;
-  const draw = room.status === 'completed' && room.winner_id == null;
-  const verdict = won ? 'Won' : draw ? 'Draw' : room.status === 'completed' ? 'Lost' : 'In progress';
-  return (
-    <Pressable onPress={onPress} hitSlop={6}>
-      <GlassCard style={styles.recentRow}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.modeTitle} numberOfLines={1}>
-            vs {opponent?.profile?.display_name ?? 'Rival'}
-          </Text>
-          <Text style={styles.modeDescription}>
-            {myAttempt
-              ? `Score ${myAttempt.score.toLocaleString()} · ${formatDuration(Math.round(myAttempt.time_ms / 1000))}`
-              : 'Pending'}
-          </Text>
-        </View>
-        <Text style={[styles.recentVerdict, won && styles.recentVerdictWin]}>
-          {verdict}
-        </Text>
-      </GlassCard>
-    </Pressable>
   );
 }
 
@@ -383,17 +325,26 @@ const styles = StyleSheet.create({
     fontSize: fontSize.lg,
     fontWeight: fontWeight.bold,
   },
-  recentRow: {
+  historyLink: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    justifyContent: 'flex-end',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
   },
-  recentVerdict: {
+  historyLinkPressed: {
+    opacity: 0.6,
+  },
+  historyLinkText: {
     color: colors.textMuted,
     fontSize: fontSize.sm,
     fontWeight: fontWeight.semibold,
+    letterSpacing: letterSpacing.wide,
   },
-  recentVerdictWin: {
+  historyLinkArrow: {
     color: colors.accentGold,
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
   },
 });

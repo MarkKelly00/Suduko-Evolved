@@ -224,6 +224,7 @@ export default function FriendsScreen() {
           outgoing={challengesOutgoing}
           completed={challengesCompleted}
           duels={recentDuels}
+          initialKind={route.params?.initialChallengeKind ?? 'levels'}
           refreshing={refreshing}
           onRefresh={handleRefresh}
           onPlay={(row) => {
@@ -532,6 +533,7 @@ function ChallengesTab({
   outgoing,
   completed,
   duels,
+  initialKind,
   refreshing,
   onRefresh,
   onPlay,
@@ -545,6 +547,9 @@ function ChallengesTab({
   outgoing: ChallengeRow[];
   completed: ChallengeRow[];
   duels: DuelRoomBundle[];
+  /** Sub-tab selection on mount. Callers like TimeTrial's
+   *  "View duel history" link pass 'duels' to deep-link directly. */
+  initialKind: ChallengeKind;
   refreshing: boolean;
   onRefresh: () => void;
   onPlay: (row: ChallengeRow) => void;
@@ -557,7 +562,7 @@ function ChallengesTab({
   onViewDuel: (roomId: string) => void;
   onAddFriends: () => void;
 }) {
-  const [kind, setKind] = useState<ChallengeKind>('levels');
+  const [kind, setKind] = useState<ChallengeKind>(initialKind);
 
   const hasLevelData =
     inbox.length > 0 || outgoing.length > 0 || completed.length > 0;

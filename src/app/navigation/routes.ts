@@ -83,6 +83,10 @@ export interface ChallengeResultRouteParams {
 }
 
 export type FriendsTab = 'friends' | 'requests' | 'add' | 'challenges';
+/** Sub-filter inside the Challenges tab. Lets callers deep-link
+ *  directly to the Duels sub-tab (e.g. from TimeTrial's "View duel
+ *  history" link) without an extra tap. */
+export type ChallengeKindParam = 'levels' | 'duels';
 
 export type LeaderboardScope = 'friends' | 'global';
 export type LeaderboardMode = 'campaign-level' | 'time-trial';
@@ -103,7 +107,14 @@ export type RootStackParamList = {
   EditProfile: undefined;
   AvatarCrop: { uri: string; width: number; height: number };
 
-  Friends: { initialTab?: FriendsTab } | undefined;
+  Friends:
+    | {
+        initialTab?: FriendsTab;
+        /** When initialTab is 'challenges', pre-selects the sub-tab.
+         *  Ignored on other tabs. */
+        initialChallengeKind?: ChallengeKindParam;
+      }
+    | undefined;
   FriendProfile: { userId: string };
   Leaderboard:
     | {

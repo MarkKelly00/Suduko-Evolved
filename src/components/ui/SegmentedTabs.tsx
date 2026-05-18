@@ -189,9 +189,15 @@ const styles = StyleSheet.create({
     height: 2,
     backgroundColor: colors.accentGold,
     borderRadius: 2,
+    // Tighten the glow halo. The previous shadowRadius: 6 + opacity 0.6
+    // bloomed the indicator outward by ~6px on each side, which read
+    // as "the underline is wider than the text" — even though the
+    // hard bar itself measured to the labelWrap precisely. A softer,
+    // narrower glow keeps the gold accent tactile without inflating
+    // the perceived width.
     shadowColor: colors.accentGoldGlow,
-    shadowOpacity: 0.6,
-    shadowRadius: 6,
+    shadowOpacity: 0.35,
+    shadowRadius: 3,
     shadowOffset: { width: 0, height: 0 },
   },
   badge: {
