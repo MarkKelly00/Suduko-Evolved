@@ -45,18 +45,22 @@ export function SegmentedTabs<TKey extends string>({
   const indicatorX = useSharedValue(0);
   const indicatorW = useSharedValue(0);
   // Tab (Pressable) layouts — each tab's x + width within the row.
-  // Used to compute the indicator's absolute x.
+  // Width is used with the Text's measured width to compute a
+  // mathematically-centered indicator offset within the cell.
   const [tabLayouts, setTabLayouts] = React.useState<
     ({ x: number; width: number } | null)[]
   >(() => items.map(() => null));
-  // Label (Text wrapper) layouts — used to size the indicator to the
-  // label's actual visible width, not the cell width. The previous
-  // version sized to the cell, which made the rightmost tab's
-  // underline appear to "leak" past the text (visible asymmetry when
-  // the label was shorter than the cell — e.g. "Challenges" 25% cell).
-  const [labelLayouts, setLabelLayouts] = React.useState<
-    ({ x: number; width: number } | null)[]
-  >(() => items.map(() => null));
+  // Text widths — taken directly from the Text element's onLayout.
+  // This is the actual rendered glyph width (no flex centering math
+  // mixed in), so the indicator can hug each label precisely
+  // regardless of cell width or where flex chose to position the
+  // wrapping View. Measuring an intermediate `labelWrap` View was
+  // flaky on the edge tabs: small rounding + the row's flex:1 cells
+  // sometimes meant the centred wrapper landed off by 1–2px, which
+  // read as visible misalignment on iPhone Pro Max.
+  const [textWidths, setTextWidths] = React.useState<(number | null)[]>(
+    () => items.map(() => null),
+  );
 
   const activeIndex = Math.max(
     0,
@@ -65,18 +69,22 @@ export function SegmentedTabs<TKey extends string>({
 
   useEffect(() => {
     const tab = tabLayouts[activeIndex];
-    const label = labelLayouts[activeIndex];
-    if (!tab || !label) return;
+    const tw = textWidths[activeIndex];
+    if (!tab || tw == null) return;
+    // Centre the indicator under the tab cell, sized to the text.
+    // Doing this mathematically removes any reliance on flex's
+    // sub-pixel rounding for the centred wrapper.
+    const x = tab.x + (tab.width - tw) / 2;
     const d = reducedMotion ? 0 : duration.base;
-    indicatorX.value = withTiming(tab.x + label.x, {
+    indicatorX.value = withTiming(x, {
       duration: d,
       easing: easing.premium,
     });
-    indicatorW.value = withTiming(label.width, {
+    indicatorW.value = withTiming(tw, {
       duration: d,
       easing: easing.premium,
     });
-  }, [activeIndex, tabLayouts, labelLayouts, indicatorX, indicatorW, reducedMotion]);
+  }, [activeIndex, tabLayouts, textWidths, indicatorX, indicatorW, reducedMotion]);
 
   const indicatorStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: indicatorX.value }],
@@ -92,11 +100,12 @@ export function SegmentedTabs<TKey extends string>({
     });
   };
 
-  const handleLabelLayout = (i: number) => (e: LayoutChangeEvent) => {
-    const { x, width } = e.nativeEvent.layout;
-    setLabelLayouts((prev) => {
+  const handleTextLayout = (i: number) => (e: LayoutChangeEvent) => {
+    const { width } = e.nativeEvent.layout;
+    setTextWidths((prev) => {
+      if (prev[i] === width) return prev;
       const next = [...prev];
-      next[i] = { x, width };
+      next[i] = width;
       return next;
     });
   };
@@ -121,25 +130,27 @@ export function SegmentedTabs<TKey extends string>({
               style={styles.tab}
               hitSlop={6}
             >
-              {/* Inner wrapper sized to text content so the indicator
-                  hugs the label, not the cell. */}
-              <View style={styles.labelWrap} onLayout={handleLabelLayout(i)}>
-                <Text
-                  style={[
-                    styles.tabLabel,
-                    active && styles.tabLabelActive,
-                  ]}
-                >
-                  {item.label}
-                </Text>
-                {item.badgeCount != null && item.badgeCount > 0 ? (
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeText}>
-                      {Math.min(99, item.badgeCount)}
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
+              {/* Text is measured directly via onLayout so the
+                  indicator's width = the actual glyph width. The
+                  badge sits as a sibling so it doesn't influence
+                  the underline (the underline tracks the label, not
+                  the cell content). */}
+              <Text
+                onLayout={handleTextLayout(i)}
+                style={[
+                  styles.tabLabel,
+                  active && styles.tabLabelActive,
+                ]}
+              >
+                {item.label}
+              </Text>
+              {item.badgeCount != null && item.badgeCount > 0 ? (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>
+                    {Math.min(99, item.badgeCount)}
+                  </Text>
+                </View>
+              ) : null}
             </Pressable>
           );
         })}
@@ -167,11 +178,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: spacing.xs,
-  },
-  labelWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: spacing.xs,
   },
   tabLabel: {

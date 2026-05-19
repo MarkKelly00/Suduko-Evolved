@@ -141,12 +141,37 @@ function TimeTrialScreen() {
           onPress={onOnlineDuel}
           accent="gold"
         />
+        {/* Slim history link directly tied to the action above —
+            "I just played a Quick Duel; show me my past ones."
+            Pre-selects the Duels sub-tab in Friends → Challenges so
+            it's one tap. */}
+        <HistoryLink
+          label="View duel history"
+          onPress={() =>
+            navigation.navigate('Friends', {
+              initialTab: 'challenges',
+              initialChallengeKind: 'duels',
+            })
+          }
+        />
         <DuelCard
           eyebrow="Friend"
           title="Challenge a friend"
           body="Pick a friend and send a same-seed challenge."
           ctaLabel="Pick friend"
           onPress={onChallengeFriend}
+        />
+        {/* Mirror history link, paired with its action. Lands on the
+            Level Challenges sub-tab so the player sees what their
+            same-seed challenges have produced. */}
+        <HistoryLink
+          label="View level challenges"
+          onPress={() =>
+            navigation.navigate('Friends', {
+              initialTab: 'challenges',
+              initialChallengeKind: 'levels',
+            })
+          }
         />
         <DuelCard
           eyebrow="Anyone"
@@ -155,28 +180,6 @@ function TimeTrialScreen() {
           ctaLabel="Create link"
           onPress={onInviteLink}
         />
-
-        {/* Slim deep-link to the canonical duel-history home. Replaces
-            the old inline 3-row Recent Duels list — that was history
-            data on an action-focused screen. Friends → Challenges →
-            Duels is one tap away and surfaces the full set. */}
-        <Pressable
-          onPress={() =>
-            navigation.navigate('Friends', {
-              initialTab: 'challenges',
-              initialChallengeKind: 'duels',
-            })
-          }
-          hitSlop={8}
-          accessibilityRole="link"
-          style={({ pressed }) => [
-            styles.historyLink,
-            pressed && styles.historyLinkPressed,
-          ]}
-        >
-          <Text style={styles.historyLinkText}>View duel history</Text>
-          <Text style={styles.historyLinkArrow}>{'→'}</Text>
-        </Pressable>
 
         {/* ----- Leaderboard shortcut ----- */}
         <View style={styles.sectionHeader}>
@@ -224,6 +227,29 @@ function DuelCard({ eyebrow, title, body, ctaLabel, accent, onPress }: DuelCardP
         style={styles.cta}
       />
     </GlassCard>
+  );
+}
+
+/**
+ * Slim history-deep-link used twice on this screen — paired with
+ * Quick Duel (→ duel history) and Challenge a friend (→ level
+ * challenges history). Same visual treatment for both so the page
+ * has a consistent secondary-action rhythm.
+ */
+function HistoryLink({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={8}
+      accessibilityRole="link"
+      style={({ pressed }) => [
+        styles.historyLink,
+        pressed && styles.historyLinkPressed,
+      ]}
+    >
+      <Text style={styles.historyLinkText}>{label}</Text>
+      <Text style={styles.historyLinkArrow}>{'→'}</Text>
+    </Pressable>
   );
 }
 
