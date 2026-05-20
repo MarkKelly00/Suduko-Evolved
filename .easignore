@@ -1,0 +1,26 @@
+# Files / dirs to exclude from the EAS Build upload. Reduces upload
+# size + prevents non-app code (Node scripts, raw secrets, dev docs)
+# from being included in the bundle context.
+
+# Node-only generator scripts (e.g. ElevenLabs SFX generation).
+# These use `dotenv`, `node:fs/promises`, `@elevenlabs/elevenlabs-js`
+# and are run locally — they have no place in the iOS bundle.
+scripts/
+
+# Editor + OS noise
+.DS_Store
+.vscode/
+.idea/
+
+# Source maps + dev artefacts
+*.log
+coverage/
+
+# Secrets shouldn't be uploaded — EAS reads env from the build profile
+.env
+.env.local
+.env.development
+.env.production
+
+# Local-only paths
+*.local

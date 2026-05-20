@@ -25,6 +25,7 @@
     "android",
     "babel.config.js",
     "metro.config.js",
-    "supabase/functions"
+    "supabase/functions",
+    "scripts"
   ]
 }
