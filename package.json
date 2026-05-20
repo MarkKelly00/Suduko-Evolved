@@ -14,7 +14,9 @@
     "test:watch": "jest --watch",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --ext .ts,.tsx",
-    "format": "prettier --write \"**/*.{ts,tsx,json,md}\""
+    "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
+    "sfx": "tsx scripts/generate-sfx.ts",
+    "sfx:regen": "tsx scripts/generate-sfx.ts --regenerate"
   },
   "dependencies": {
     "@react-native-community/netinfo": "11.4.1",
@@ -50,17 +52,20 @@
     "zustand": "^5.0.13"
   },
   "devDependencies": {
+    "@elevenlabs/elevenlabs-js": "^2.48.0",
     "@types/jest": "^29.5.14",
     "@types/react": "~19.1.0",
     "@typescript-eslint/eslint-plugin": "^8.59.2",
     "@typescript-eslint/parser": "^8.59.2",
     "babel-preset-expo": "~54.0.10",
+    "dotenv": "^17.4.2",
     "eslint": "^9.39.4",
     "eslint-config-expo": "~10.0.0",
     "jest": "^29.7.0",
     "jest-expo": "~54.0.17",
     "prettier": "^3.8.3",
     "sharp": "^0.33.5",
+    "tsx": "^4.22.3",
     "typescript": "~5.9.2"
   }
 }
