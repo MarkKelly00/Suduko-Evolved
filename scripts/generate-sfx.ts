@@ -39,82 +39,90 @@ interface SfxPrompt {
 }
 
 const SFX_PROMPTS: SfxPrompt[] = [
-  // ─── UI taps & micro-feedback (0.15–0.4s) ──────────────────────────
+  // ─── UI taps + micro-feedback (0.5–0.7s) ───────────────────────────
+  // v2 direction (build 30): "tactile + satisfying" — Candy-Crush-
+  // influenced but not arcade. Each repeated tap should feel like a
+  // small dopamine hit while reading as premium. v1 was too calm and
+  // got annoying on high-frequency keys (especially `note`).
   {
     key: 'tap',
     durationSeconds: 0.5,
     prompt:
-      'Soft refined UI tap, faint glass tick, very short, no reverb, calm and premium',
+      'Soft synth pop with a faint resonant ping, tactile click, brief and rewarding, like a refined bubble pop crossed with a premium keyboard tap',
   },
   {
     key: 'selectCell',
     durationSeconds: 0.5,
     prompt:
-      'Single muted glass highlight tick, warm and refined, very short, soft mid-high tone',
+      'Crisp soft glass click with a brief melodic ping, tactile and satisfying, like a high-end iOS keyboard tap combined with a soft mallet hit',
   },
   {
     key: 'note',
     durationSeconds: 0.5,
     prompt:
-      'Light pencil-on-paper texture, soft warm tick, brief and gentle, no music',
+      'Soft tactile click with a tiny musical ping, playful but refined, like dropping a small gem onto a glass surface — satisfying enough to repeat hundreds of times without becoming annoying',
   },
   {
     key: 'erase',
     durationSeconds: 0.5,
     prompt:
-      'Soft brush sweep on paper, gentle reversed swoosh, brief and muted',
+      'Quick soft brush stroke with a faint reverse swoosh, gentle and tactile, like a soft eraser sweep on premium paper, brief and warm',
   },
   {
     key: 'place',
-    durationSeconds: 0.6,
+    durationSeconds: 0.7,
     prompt:
-      'Confident soft wooden marimba pluck with subtle glass shimmer tail, warm placement, premium calm feel',
+      'Confident soft synth pluck with warm wooden resonance and a brief glass shimmer tail, deeply satisfying placement sound, premium and rewarding',
   },
   {
     key: 'mistake',
     durationSeconds: 0.6,
     prompt:
-      'Subtle dissonant low buzz with muted thud, brief tasteful error tone, premium not harsh, no klaxon',
+      'Soft muted bonk with a tasteful low buzz, playful but clearly wrong, brief and not harsh, like a friendly correction tone — never aggressive',
   },
   {
     key: 'buttonPrimary',
     durationSeconds: 0.5,
     prompt:
-      'Premium gold-tone UI tap with subtle warm resonance, refined and short',
+      'Premium gold-tone synth pluck with a warm tactile click and brief resonance, refined and satisfying like a high-end haptic confirmation',
   },
   {
     key: 'buttonSecondary',
     durationSeconds: 0.5,
-    prompt: 'Soft muted UI click, neutral and brief, no resonance',
+    prompt:
+      'Soft tactile UI click with a tiny glass undertone, brief and neutral, like a refined keyboard space-bar press',
   },
 
-  // ─── Completion stings (0.6–1.0s) ──────────────────────────────────
+  // ─── Completion stings (0.8–1.0s) ──────────────────────────────────
   {
     key: 'rowComplete',
     durationSeconds: 0.8,
     prompt:
-      'Soft warm harp arpeggio rising left-to-right across five notes, gentle glass shimmer tail',
+      'Bright playful arpeggio rising left-to-right, five quick chimes with sparkle tail, rewarding and joyful — premium candy-game cascade with polish',
   },
   {
     key: 'columnComplete',
     durationSeconds: 0.8,
     prompt:
-      'Soft warm harp arpeggio descending across five notes, gentle chime tail',
+      'Bright playful arpeggio descending across five quick chimes with sparkle, tonally mirrors row-complete, rewarding and tactile',
   },
   {
     key: 'boxComplete',
     durationSeconds: 1.0,
     prompt:
-      'Warm soft bell cluster, three chimes with gentle bass swell, calm but confident',
+      'Warm bell cluster with a satisfying low thud, three chimes blooming with bass swell, premium dopamine-hit completion sting',
   },
   {
     key: 'numberSetComplete',
     durationSeconds: 0.9,
     prompt:
-      'Soft glass marimba ascending run resolving on a sparkle, magical and refined',
+      'Sparkling ascending run resolving on a bright bell, magical and rewarding, like collecting a gem cluster in a premium puzzle game',
   },
 
-  // ─── Cinematic moments (1.0–1.8s) ──────────────────────────────────
+  // ─── Cinematic moments (1.2–2.0s) ──────────────────────────────────
+  // `combo` and `puzzleComplete` left at v1 prompts — user explicitly
+  // liked them. These two are skipped by the regen list in the plan;
+  // only retouched if needed.
   {
     key: 'combo',
     durationSeconds: 1.2,
@@ -131,13 +139,13 @@ const SFX_PROMPTS: SfxPrompt[] = [
     key: 'mapUnlock',
     durationSeconds: 1.4,
     prompt:
-      'Gentle magical unlock: soft chime cascade with subtle high sparkle and warm low swell, calm and confident',
+      'Gentle magical unlock with sparkle cascade and warm bass swell, playful but elevated, like opening a new chapter in a premium adventure',
   },
   {
     key: 'chestOpen',
     durationSeconds: 1.2,
     prompt:
-      'Soft wooden creak open, warm golden shimmer with gentle bell, refined and tasteful',
+      'Soft wooden creak open with warm golden shimmer and gentle bell, treasure-reveal that\'s tasteful but exciting, premium with a hint of magic',
   },
 ];
 

@@ -7,7 +7,9 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { CurrencyPill } from '@/components/ui/CurrencyPill';
 import { ProgressRing } from '@/components/ui/ProgressRing';
 import { PremiumButton } from '@/components/ui/PremiumButton';
-import { Avatar } from '@/components/profile/Avatar';
+import { ProfileHeaderCard } from '@/components/profile/ProfileHeaderCard';
+import { ProfileStatsGrid } from '@/components/profile/ProfileStatsGrid';
+import { ProfileRecentSolvesList } from '@/components/profile/ProfileRecentSolvesList';
 import { useAuthStore } from '@/game/state/useAuthStore';
 import { useAuthGate } from '@/components/auth/AuthGate';
 import { useProgressStore } from '@/game/state/useProgressStore';
@@ -18,6 +20,8 @@ import {
   isPlatformIOS,
   type GameCenterPlayer,
 } from '@/services/gameCenter';
+import { profileService } from '@/services/supabase';
+import type { RecentSolve } from '@/services/supabase/profileService';
 import {
   colors,
   fontFamily,
@@ -48,6 +52,25 @@ function ProfileScreen() {
   const sprintBest = timeTrialBests['sprint-3min'];
 
   const isAuthenticated = status === 'authenticated' && profile != null;
+
+  // Cloud-side recent solves for the new "Recent solves" card. Only
+  // fetched when the user is authenticated (otherwise we don't have a
+  // user id to query). Falls back to an empty list silently.
+  const [solves, setSolves] = useState<RecentSolve[]>([]);
+  useEffect(() => {
+    if (!isAuthenticated || !profile) {
+      setSolves([]);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const rows = await profileService.getRecentSolves(profile.id, 6);
+      if (!cancelled) setSolves(rows);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, profile]);
 
   // Game Center status for the optional GC card. Only rendered on iOS
   // when the user has opted in via Settings AND is currently signed in
@@ -88,42 +111,68 @@ function ProfileScreen() {
       />
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {isAuthenticated ? (
-          <AuthenticatedHeader
-            profile={profile}
-            onEdit={() => navigation.navigate('EditProfile')}
-            totalXP={totalXP}
-            currentStreak={currentStreak}
-          />
-        ) : (
-          <View style={styles.header}>
-            <ProgressRing
-              progress={progress}
-              size={120}
-              label={`${completedLevelIds.length}/${totalLevels}`}
-              caption="cleared"
+          <>
+            <ProfileHeaderCard
+              displayName={profile.display_name ?? 'Sudoku player'}
+              username={profile.username ?? null}
+              avatarUrl={profile.avatar_url}
+              crownsTotal={profile.crowns_total}
+              streak={profile.streak}
             />
-            <View style={styles.pillsColumn}>
-              <CurrencyPill label="XP" value={totalXP} icon="" />
-              <CurrencyPill label="streak" value={currentStreak} icon="" />
+            <Pressable
+              onPress={() => navigation.navigate('EditProfile')}
+              accessibilityRole="button"
+              accessibilityLabel="Edit profile"
+              hitSlop={6}
+              style={styles.editProfileLinkWrap}
+            >
+              <Text style={styles.editProfileLink}>Edit profile →</Text>
+            </Pressable>
+            <ProfileStatsGrid
+              xp={profile.xp}
+              levelsCleared={profile.levels_cleared}
+              starsTotal={profile.stars_total}
+              crownsTotal={profile.crowns_total}
+              bestTimeTrialScore={profile.best_time_trial_score}
+              createdAt={profile.created_at}
+            />
+            <ProfileRecentSolvesList solves={solves} />
+          </>
+        ) : (
+          <>
+            <View style={styles.header}>
+              <ProgressRing
+                progress={progress}
+                size={120}
+                label={`${completedLevelIds.length}/${totalLevels}`}
+                caption="cleared"
+              />
+              <View style={styles.pillsColumn}>
+                <CurrencyPill label="XP" value={totalXP} icon="" />
+                <CurrencyPill label="streak" value={currentStreak} icon="" />
+              </View>
             </View>
-          </View>
+
+            {/* Guests use the local progress store, not server-side
+                aggregates — so the legacy compact cards stay for the
+                unauthenticated branch. */}
+            <GlassCard style={styles.card}>
+              <Text style={styles.sectionTitle}>Stars &amp; Crowns</Text>
+              <View style={styles.statsRow}>
+                <Stat label="Stars" value={`${totalStars}/${totalLevels * 3}`} />
+                <Stat label="Crowns" value={`${crowns}`} />
+              </View>
+            </GlassCard>
+
+            <GlassCard style={styles.card}>
+              <Text style={styles.sectionTitle}>Time Trial</Text>
+              <View style={styles.statsRow}>
+                <Stat label="Best Score" value={`${sprintBest?.score ?? 0}`} />
+                <Stat label="Best Time (s)" value={`${sprintBest?.time ?? 0}`} />
+              </View>
+            </GlassCard>
+          </>
         )}
-
-        <GlassCard style={styles.card}>
-          <Text style={styles.sectionTitle}>Stars &amp; Crowns</Text>
-          <View style={styles.statsRow}>
-            <Stat label="Stars" value={`${totalStars}/${totalLevels * 3}`} />
-            <Stat label="Crowns" value={`${crowns}`} />
-          </View>
-        </GlassCard>
-
-        <GlassCard style={styles.card}>
-          <Text style={styles.sectionTitle}>Time Trial</Text>
-          <View style={styles.statsRow}>
-            <Stat label="Best Score" value={`${sprintBest?.score ?? 0}`} />
-            <Stat label="Best Time (s)" value={`${sprintBest?.time ?? 0}`} />
-          </View>
-        </GlassCard>
 
         <GlassCard style={styles.card}>
           <Text style={styles.sectionTitle}>Achievements</Text>
@@ -193,43 +242,6 @@ function ProfileScreen() {
   );
 }
 
-function AuthenticatedHeader({
-  profile,
-  onEdit,
-  totalXP,
-  currentStreak,
-}: {
-  profile: NonNullable<ReturnType<typeof useAuthStore.getState>['profile']>;
-  onEdit: () => void;
-  totalXP: number;
-  currentStreak: number;
-}) {
-  return (
-    <View style={styles.authHeader}>
-      <Avatar
-        size="lg"
-        url={profile.avatar_url}
-        fallbackName={profile.display_name ?? profile.username}
-      />
-      <View style={styles.authInfo}>
-        <Text style={styles.displayName}>
-          {profile.display_name ?? 'Sudoku player'}
-        </Text>
-        {profile.username ? (
-          <Text style={styles.username}>{`@${profile.username}`}</Text>
-        ) : null}
-        <Pressable onPress={onEdit} accessibilityRole="button" accessibilityLabel="Edit profile">
-          <Text style={styles.editLink}>Edit profile</Text>
-        </Pressable>
-        <View style={styles.pillsRow}>
-          <CurrencyPill label="XP" value={totalXP} icon="" />
-          <CurrencyPill label="streak" value={currentStreak} icon="" />
-        </View>
-      </View>
-    </View>
-  );
-}
-
 function SignInPromptCard({ onSignIn }: { onSignIn: () => void }) {
   return (
     <GlassCard style={styles.signInCard}>
@@ -274,33 +286,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginVertical: spacing.lg,
   },
-  authHeader: {
-    flexDirection: 'row',
-    gap: spacing.lg,
-    alignItems: 'center',
-    marginVertical: spacing.lg,
+  editProfileLinkWrap: {
+    alignSelf: 'flex-end',
+    paddingHorizontal: spacing.xs,
+    // Sits between the header card and the stats grid — small, right-
+    // aligned, gold accent. Doesn't compete with the card layout.
+    marginTop: -spacing.sm,
   },
-  authInfo: {
-    flex: 1,
-    gap: spacing.xxs,
-  },
-  displayName: {
-    color: colors.text,
-    fontFamily: fontFamily.display,
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.bold,
-  },
-  username: {
-    color: colors.textMuted,
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium,
-  },
-  editLink: {
+  editProfileLink: {
     color: colors.accentGoldGlow,
     fontSize: fontSize.xs,
     fontWeight: fontWeight.semibold,
     letterSpacing: letterSpacing.wide,
-    marginTop: spacing.xxs,
   },
   pillsColumn: {
     gap: spacing.sm,

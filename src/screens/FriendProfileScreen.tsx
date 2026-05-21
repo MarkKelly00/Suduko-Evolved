@@ -13,14 +13,16 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { ScreenBackground } from '@/components/ui/ScreenBackground';
 import { TopBar } from '@/components/ui/TopBar';
 import { GlassCard } from '@/components/ui/GlassCard';
-import { CurrencyPill } from '@/components/ui/CurrencyPill';
 import { PremiumButton } from '@/components/ui/PremiumButton';
-import { Avatar } from '@/components/profile/Avatar';
+import { ProfileHeaderCard } from '@/components/profile/ProfileHeaderCard';
+import { ProfileStatsGrid } from '@/components/profile/ProfileStatsGrid';
+import { ProfileRecentSolvesList } from '@/components/profile/ProfileRecentSolvesList';
 import {
   friendService,
   profileService,
   type Profile,
 } from '@/services/supabase';
+import type { RecentSolve } from '@/services/supabase/profileService';
 import { useChallengeIntentStore } from '@/game/state/useChallengeIntentStore';
 import { hapticsService } from '@/services/haptics/hapticsService';
 import {
@@ -39,6 +41,7 @@ export default function FriendProfileScreen() {
   const { userId } = route.params;
 
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [solves, setSolves] = useState<RecentSolve[]>([]);
   const [status, setStatus] = useState<
     'none' | 'pending_in' | 'pending_out' | 'accepted' | 'blocked'
   >('none');
@@ -47,13 +50,15 @@ export default function FriendProfileScreen() {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const [p, s] = await Promise.all([
+      const [p, s, rs] = await Promise.all([
         profileService.getProfile(userId),
         friendService.getFriendshipStatus(userId),
+        profileService.getRecentSolves(userId, 6),
       ]);
       if (cancelled) return;
       setProfile(p);
       setStatus(s);
+      setSolves(rs);
       setLoading(false);
     })();
     return () => {
@@ -177,30 +182,22 @@ export default function FriendProfileScreen() {
     <ScreenBackground>
       <TopBar title="Profile" />
       <ScrollView contentContainerStyle={styles.body}>
-        <View style={styles.hero}>
-          <Avatar
-            size="xl"
-            url={profile.avatar_url}
-            fallbackName={profile.display_name ?? profile.username}
-          />
-          <Text style={styles.displayName}>
-            {profile.display_name ?? 'Sudoku player'}
-          </Text>
-          {profile.username ? (
-            <Text style={styles.handle}>{`@${profile.username}`}</Text>
-          ) : null}
-        </View>
-
-        <View style={styles.statsRow}>
-          <CurrencyPill label="XP" value={profile.xp} icon="" />
-          <CurrencyPill label="streak" value={profile.streak} icon="" />
-          <CurrencyPill label="cleared" value={profile.levels_cleared} icon="" />
-        </View>
-        <View style={styles.statsRow}>
-          <CurrencyPill label="stars" value={profile.stars_total} icon="" />
-          <CurrencyPill label="crowns" value={profile.crowns_total} icon="" />
-          <CurrencyPill label="best TT" value={profile.best_time_trial_score} icon="" />
-        </View>
+        <ProfileHeaderCard
+          displayName={profile.display_name ?? 'Sudoku player'}
+          username={profile.username ?? null}
+          avatarUrl={profile.avatar_url}
+          crownsTotal={profile.crowns_total}
+          streak={profile.streak}
+        />
+        <ProfileStatsGrid
+          xp={profile.xp}
+          levelsCleared={profile.levels_cleared}
+          starsTotal={profile.stars_total}
+          crownsTotal={profile.crowns_total}
+          bestTimeTrialScore={profile.best_time_trial_score}
+          createdAt={profile.created_at}
+        />
+        <ProfileRecentSolvesList solves={solves} />
 
         {status === 'accepted' ? (
           <>
@@ -263,31 +260,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xxxl,
     gap: spacing.base,
-  },
-  hero: {
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.lg,
-  },
-  displayName: {
-    color: colors.text,
-    fontFamily: fontFamily.display,
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.bold,
-    marginTop: spacing.sm,
-    textShadowColor: 'rgba(245,213,138,0.4)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 8,
-  },
-  handle: {
-    color: colors.textMuted,
-    fontSize: fontSize.sm,
-    letterSpacing: letterSpacing.wide,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    flexWrap: 'wrap',
   },
   note: {
     color: colors.textMuted,
