@@ -84,10 +84,21 @@ export default function DuelGameScreen() {
   const reconnectCountRef = useRef(0);
 
   // Start the sprint session bound to the server's seed.
+  //
+  // Belt-and-braces: clear any stale `active` from a previous duel
+  // BEFORE creating the new session. Otherwise the terminal-submission
+  // effect below could fire on its initial run with the previous
+  // duel's "won"/"timedOut" status still in store, and submit that
+  // old score against the NEW roomId — the cause of the famous
+  // "phantom rematch" rooms that completed in 6–9 seconds as a 710/710
+  // draw (see commits 120c02a + this fix's commit message). The
+  // guard inside the terminal-submission effect catches the same
+  // race; we clear here for defence-in-depth.
   useEffect(() => {
     if (!modeMeta) return;
     const level = synthesizeDuelLevel(mode, puzzleSeed);
     if (!level) return;
+    useGameStore.setState({ active: null });
     useGameStore.getState().startSprintSession({
       modeId: mode,
       level,
@@ -260,12 +271,41 @@ export default function DuelGameScreen() {
   }, []);
 
   // Terminal status — submit and route to results.
+  //
+  // IMPORTANT: the order here matters. We must:
+  //   1. Read `active` from the store FIRST
+  //   2. Verify this screen "owns" that session (mode + seed match what
+  //      this screen was navigated with) BEFORE flipping submittedRef
+  //   3. Only then commit to submitting
+  //
+  // Without the seed/mode check, the effect's initial fire on a fresh
+  // mount can observe a STALE `status === 'won'` left over from the
+  // previous duel — that session's score (e.g. 710) gets submitted to
+  // the NEW roomId, and both players' devices doing the same thing
+  // produces the 6–9 second "phantom rematch" auto-draw we saw in
+  // the database. See commit 120c02a for the analogous Time Trial
+  // re-entry fix; same root cause, different surface.
   useEffect(() => {
     if (status !== 'won' && status !== 'timedOut') return;
     if (submittedRef.current) return;
-    submittedRef.current = true;
     const a = useGameStore.getState().active;
     if (!a || !modeMeta) return;
+    // Reject stale sessions: a duel's active state must reference the
+    // same mode + puzzle seed this screen was opened with. If they
+    // don't match we're observing a previous duel's terminal state
+    // bleeding into a fresh mount — ignore.
+    if (a.modeId !== mode || a.level.seed !== puzzleSeed) {
+      if (__DEV__) {
+        console.warn('[DuelGame] stale active session ignored', {
+          screenMode: mode,
+          screenSeed: puzzleSeed,
+          activeMode: a.modeId,
+          activeSeed: a.level.seed,
+        });
+      }
+      return;
+    }
+    submittedRef.current = true;
     const elapsedSec = Math.floor(a.elapsedMs / 1000);
     const cleared = status === 'won';
     const remainingEmpties = countEmpties(a.grid);
