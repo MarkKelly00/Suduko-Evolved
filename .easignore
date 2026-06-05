@@ -24,3 +24,21 @@ coverage/
 
 # Local-only paths
 *.local
+
+# Native build artifacts — EAS regenerates these on its build server
+# via `pod install` + `xcodebuild`. Locally we ship the Podfile +
+# Podfile.lock + .xcodeproj/.xcworkspace + Swift sources (everything
+# under ios/SudokuEvolved/, which is the app's own native code), but
+# we DO NOT need to upload:
+#   - ios/Pods/  ~ 929 MB of CocoaPods dependencies (re-installed
+#                  from Podfile.lock on EAS, deterministic)
+#   - ios/build/ ~ Xcode-generated DerivedData / build outputs from
+#                  any local `expo run:ios` invocation
+# Excluding these dropped a 450 MB upload back to ~28 MB.
+ios/Pods/
+ios/build/
+ios/DerivedData/
+# Android equivalents in case prebuild is run for android too
+android/build/
+android/.gradle/
+android/app/build/
