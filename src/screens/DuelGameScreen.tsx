@@ -272,28 +272,41 @@ export default function DuelGameScreen() {
 
   // Terminal status — submit and route to results.
   //
-  // IMPORTANT: the order here matters. We must:
-  //   1. Read `active` from the store FIRST
-  //   2. Verify this screen "owns" that session (mode + seed match what
-  //      this screen was navigated with) BEFORE flipping submittedRef
-  //   3. Only then commit to submitting
+  // CRITICAL: every gate inside this effect reads from `a.status`
+  // (the LIVE store value) instead of the captured `status` closure.
   //
-  // Without the seed/mode check, the effect's initial fire on a fresh
-  // mount can observe a STALE `status === 'won'` left over from the
-  // previous duel — that session's score (e.g. 710) gets submitted to
-  // the NEW roomId, and both players' devices doing the same thing
-  // produces the 6–9 second "phantom rematch" auto-draw we saw in
-  // the database. See commit 120c02a for the analogous Time Trial
-  // re-entry fix; same root cause, different surface.
+  // Why: on rematch, the store's `active.status` from the previous
+  // duel is still 'won' at the moment this component first renders,
+  // so the closure-captured `status` is 'won' on its very first
+  // useEffect fire. The start-session effect above runs FIRST in
+  // declaration order, so by the time this effect runs the store
+  // ALREADY has the new session (status='playing'), but the closure
+  // still says 'won'. My earlier fix (commit 9e220cc) gated on
+  // `level.seed === puzzleSeed`, but the start-session effect had
+  // also already updated the seed by the time this effect ran —
+  // both halves of the guard observed the new session and let the
+  // phantom submit through.
+  //
+  // Reading `a.status` from the store directly closes the loophole:
+  // even if the closure says 'won', the live store shows 'playing'
+  // for a freshly-started session, so the effect bails.
+  //
+  // Dep array still includes `status` so re-renders re-fire the
+  // effect when the *current* session legitimately transitions to a
+  // terminal state.
   useEffect(() => {
-    if (status !== 'won' && status !== 'timedOut') return;
     if (submittedRef.current) return;
     const a = useGameStore.getState().active;
     if (!a || !modeMeta) return;
-    // Reject stale sessions: a duel's active state must reference the
-    // same mode + puzzle seed this screen was opened with. If they
-    // don't match we're observing a previous duel's terminal state
-    // bleeding into a fresh mount — ignore.
+    // Status must be a real terminal in the LIVE store, not the
+    // closure-captured value (which can be stale from the previous
+    // duel for one render after mount).
+    if (a.status !== 'won' && a.status !== 'timedOut') return;
+    // Session ownership: mode + seed must match what this screen was
+    // navigated with. Belt-and-braces — the status check above
+    // already catches the rematch race, but this protects against
+    // any future code path that leaves a terminal session in store
+    // while a new screen mounts.
     if (a.modeId !== mode || a.level.seed !== puzzleSeed) {
       if (__DEV__) {
         console.warn('[DuelGame] stale active session ignored', {
@@ -307,7 +320,7 @@ export default function DuelGameScreen() {
     }
     submittedRef.current = true;
     const elapsedSec = Math.floor(a.elapsedMs / 1000);
-    const cleared = status === 'won';
+    const cleared = a.status === 'won';
     const remainingEmpties = countEmpties(a.grid);
     const correctPlacements = Math.max(
       0,
