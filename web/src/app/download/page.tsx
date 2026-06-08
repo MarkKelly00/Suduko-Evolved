@@ -6,21 +6,16 @@ import { SectionEyebrow } from '@/components/ui/SectionEyebrow';
 import { LogicGardenBackdrop } from '@/components/marketing/LogicGardenBackdrop';
 import { SiteHeader } from '@/components/marketing/SiteHeader';
 import { SiteFooter } from '@/components/marketing/SiteFooter';
-import {
-  buildAppStoreUrl,
-  buildPlayStoreUrl,
-  buildTestFlightUrl,
-} from '@/lib/deep-links/urls';
+import { buildAppStoreUrl, buildPlayStoreUrl } from '@/lib/deep-links/urls';
 import { TAGLINE } from '@/lib/brand/copy';
 
 export const metadata: Metadata = {
   title: 'Download',
-  description: 'Get Sudoku Evolved on iOS — App Store and TestFlight.',
+  description: 'Get Sudoku Evolved free on the App Store.',
 };
 
 export default function DownloadPage() {
   const appStore = buildAppStoreUrl();
-  const testflight = buildTestFlightUrl();
   const playStore = buildPlayStoreUrl();
 
   return (
@@ -37,34 +32,19 @@ export default function DownloadPage() {
             {TAGLINE} Built for iPhone, with iPad and Android coming soon.
           </p>
 
-          <div className="mt-12 grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="mt-12 mx-auto max-w-md">
             <GlassCard padding="lg" className="!rounded-3xl text-center">
               <p className="section-eyebrow">iOS · App Store</p>
               <h2 className="mt-3 serif-display text-2xl text-[var(--color-text)]">
                 For everyone
               </h2>
               <p className="mt-3 text-sm text-[var(--color-text-muted)]">
-                The official, stable release. Recommended for most players.
+                The official, stable release — free on the App Store.
               </p>
               <div className="mt-6 flex justify-center">
                 <PremiumButton size="md" variant="primary" href={appStore}>
                   Download for iOS
                   <ArrowRight className="h-4 w-4" />
-                </PremiumButton>
-              </div>
-            </GlassCard>
-
-            <GlassCard padding="lg" className="!rounded-3xl text-center">
-              <p className="section-eyebrow">TestFlight</p>
-              <h2 className="mt-3 serif-display text-2xl text-[var(--color-text)]">
-                For early access
-              </h2>
-              <p className="mt-3 text-sm text-[var(--color-text-muted)]">
-                Try the next build before it ships. Bug-friendly, feature-fresh.
-              </p>
-              <div className="mt-6 flex justify-center">
-                <PremiumButton size="md" variant="secondary" href={testflight}>
-                  Join TestFlight
                 </PremiumButton>
               </div>
             </GlassCard>

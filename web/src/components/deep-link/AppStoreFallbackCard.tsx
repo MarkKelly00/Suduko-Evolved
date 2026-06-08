@@ -3,10 +3,7 @@
 import { motion, useReducedMotion } from 'framer-motion';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { PremiumButton } from '@/components/ui/PremiumButton';
-import {
-  buildAppStoreUrl,
-  buildTestFlightUrl,
-} from '@/lib/deep-links/urls';
+import { buildAppStoreUrl } from '@/lib/deep-links/urls';
 
 interface Props {
   visible?: boolean;
@@ -15,7 +12,6 @@ interface Props {
 export function AppStoreFallbackCard({ visible = false }: Props) {
   const reducedMotion = useReducedMotion();
   const appStore = buildAppStoreUrl();
-  const testflight = buildTestFlightUrl();
   if (!visible) return null;
 
   return (
@@ -32,9 +28,6 @@ export function AppStoreFallbackCard({ visible = false }: Props) {
         <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
           <PremiumButton size="md" variant="primary" href={appStore}>
             Download for iOS
-          </PremiumButton>
-          <PremiumButton size="md" variant="secondary" href={testflight}>
-            Join TestFlight
           </PremiumButton>
         </div>
       </GlassCard>

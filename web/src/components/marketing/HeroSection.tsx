@@ -4,11 +4,10 @@ import { SectionEyebrow } from '@/components/ui/SectionEyebrow';
 import { AppPreviewFrame } from './AppPreviewFrame';
 import { LogicGardenBackdrop } from './LogicGardenBackdrop';
 import { HERO_BODY, TAGLINE } from '@/lib/brand/copy';
-import { getBestIosCtaUrl, buildTestFlightUrl } from '@/lib/deep-links/urls';
+import { getBestIosCtaUrl } from '@/lib/deep-links/urls';
 
 export function HeroSection() {
   const iosUrl = getBestIosCtaUrl();
-  const testflightUrl = buildTestFlightUrl();
 
   return (
     <section className="relative overflow-hidden pb-14 pt-10 md:pb-24 md:pt-20 lg:pb-36 lg:pt-28">
@@ -40,11 +39,6 @@ export function HeroSection() {
               Download for iOS
               <ArrowRight className="h-4 w-4" />
             </PremiumButton>
-            {!iosUrl && testflightUrl && (
-              <PremiumButton size="lg" variant="secondary" href={testflightUrl}>
-                Join TestFlight
-              </PremiumButton>
-            )}
             <PremiumButton size="lg" variant="ghost" href="#features">
               View features
             </PremiumButton>
