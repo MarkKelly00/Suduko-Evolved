@@ -34,6 +34,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..');
 const outDir = path.join(repoRoot, 'assets', 'achievements');
+// App Store Connect masters — 1024×1024 sRGB PNG, uploaded per achievement.
+const masterDir = path.join(repoRoot, 'assets', 'game-center-achievements');
 
 const args = process.argv.slice(2);
 function flag(name) {
@@ -65,6 +67,7 @@ if (onlyId && !allIds.includes(onlyId)) {
 }
 
 mkdirSync(outDir, { recursive: true });
+mkdirSync(masterDir, { recursive: true });
 
 console.log(`xAI Grok Imagine — generating ${targets.length} achievement icon${targets.length === 1 ? '' : 's'}`);
 if (dryRun) console.log('(dry-run mode — no API calls will be made)');
@@ -119,10 +122,16 @@ async function generateOne(id) {
   }
 
   const buf = Buffer.from(b64, 'base64');
+  // In-app gallery icon (256²) + App Store Connect master (1024²), from the
+  // same source render so the two never drift.
   await sharp(buf)
     .resize(256, 256, { fit: 'cover' })
     .png({ compressionLevel: 9 })
     .toFile(outPath);
+  await sharp(buf)
+    .resize(1024, 1024, { fit: 'cover' })
+    .png({ compressionLevel: 9 })
+    .toFile(path.join(masterDir, `${id}.png`));
 
   const elapsedMs = Date.now() - startedAt;
   console.log(`  ✓ ${id} [${tier}] (${(elapsedMs / 1000).toFixed(1)}s)`);
