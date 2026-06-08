@@ -48,12 +48,23 @@ export interface ParticleFieldHandle {
 interface Props {
   width: number;
   height: number;
+  /** Ambient pool size. Defaults to the World 1 budget (60). World 2 passes a
+   *  cosmic preset count. Reduced motion overrides this to `reducedAmbientCount`. */
+  ambientCount?: number;
+  /** Ambient pool size under reduced motion. Defaults to 0 (no drift). */
+  reducedAmbientCount?: number;
+  /** Per-particle tint palette (cycled by seed). Defaults to the garden
+   *  pollen palette. */
+  palette?: string[];
+  /** Default burst colour for `burstAt` when no explicit colour is passed. */
+  burstColor?: string;
 }
 
 const AMBIENT_COUNT = 60;
 const REDUCED_AMBIENT_COUNT = 0;
 const BURST_PARTICLES = 14;
 const BURST_DEFAULT_COLOR = colors.gardenBloom;
+const DEFAULT_PALETTE = [colors.gardenCyanGlow, colors.gardenBloom, colors.gardenGold];
 
 interface BurstEvent {
   id: number;
@@ -72,19 +83,18 @@ function AmbientParticle({
   width,
   height,
   seed,
+  palette,
 }: {
   width: number;
   height: number;
   seed: number;
+  palette: string[];
 }) {
   const startX = useMemo(() => ((seed * 9301 + 49297) % 233280) / 233280, [seed]);
   const startY = useMemo(() => ((seed * 7919 + 104729) % 233280) / 233280, [seed]);
   const drift = useMemo(() => ((seed * 7) % 60) + 28, [seed]);
   const periodMs = useMemo(() => 5200 + ((seed * 113) % 4200), [seed]);
-  const tint = useMemo(() => {
-    const palette = [colors.gardenCyanGlow, colors.gardenBloom, colors.gardenGold];
-    return palette[seed % palette.length]!;
-  }, [seed]);
+  const tint = useMemo(() => palette[seed % palette.length]!, [seed, palette]);
 
   const baseX = startX * width;
   const baseY = startY * height;
@@ -215,11 +225,18 @@ function BurstParticle({
 }
 
 export const ParticleField = forwardRef<ParticleFieldHandle, Props>(function ParticleField(
-  { width, height },
+  {
+    width,
+    height,
+    ambientCount: ambientCountProp = AMBIENT_COUNT,
+    reducedAmbientCount = REDUCED_AMBIENT_COUNT,
+    palette = DEFAULT_PALETTE,
+    burstColor = BURST_DEFAULT_COLOR,
+  },
   ref,
 ) {
   const reducedMotion = useSettingsStore((s) => s.reducedMotion);
-  const ambientCount = reducedMotion ? REDUCED_AMBIENT_COUNT : AMBIENT_COUNT;
+  const ambientCount = reducedMotion ? reducedAmbientCount : ambientCountProp;
   const ambientSeeds = useMemo(
     () => Array.from({ length: ambientCount }, (_, i) => i + 1),
     [ambientCount],
@@ -229,7 +246,7 @@ export const ParticleField = forwardRef<ParticleFieldHandle, Props>(function Par
   const [bursts, setBursts] = useState<BurstEvent[]>([]);
 
   const fireBurst = useCallback(
-    (x: number, y: number, color: string = BURST_DEFAULT_COLOR) => {
+    (x: number, y: number, color: string = burstColor) => {
       const id = ++idCounter.current;
       const event: BurstEvent = { id, x, y, color, spawnedAt: Date.now() };
       setBursts((cur) => [...cur, event]);
@@ -239,15 +256,15 @@ export const ParticleField = forwardRef<ParticleFieldHandle, Props>(function Par
         setBursts((cur) => cur.filter((e) => e.id !== id));
       }, ttl);
     },
-    [reducedMotion],
+    [reducedMotion, burstColor],
   );
 
   useImperativeHandle(
     ref,
     () => ({
-      burstAt: (x, y, color) => fireBurst(x, y, color ?? BURST_DEFAULT_COLOR),
+      burstAt: (x, y, color) => fireBurst(x, y, color ?? burstColor),
     }),
-    [fireBurst],
+    [fireBurst, burstColor],
   );
 
   return (
@@ -259,7 +276,13 @@ export const ParticleField = forwardRef<ParticleFieldHandle, Props>(function Par
     >
       <Canvas style={[styles.fill, { width, height }]}>
         {ambientSeeds.map((seed) => (
-          <AmbientParticle key={`amb-${seed}`} seed={seed} width={width} height={height} />
+          <AmbientParticle
+            key={`amb-${seed}`}
+            seed={seed}
+            width={width}
+            height={height}
+            palette={palette}
+          />
         ))}
         {bursts.map((event) => (
           <BurstGroup key={`burst-${event.id}`} event={event} reducedMotion={reducedMotion} />

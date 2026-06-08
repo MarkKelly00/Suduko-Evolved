@@ -63,8 +63,12 @@ export function cloneGrid(grid: Grid): Grid {
 }
 
 /**
- * Stable seed strings for World 1 levels 1-30. Versioned so a single bad
- * puzzle can be replaced (`-v2`) without disturbing other levels' progress.
+ * Stable seed strings for every campaign level, keyed by GLOBAL level index.
+ *  - 1-30   → World 1 (Logic Garden)
+ *  - 31-60  → World 2 (Astral Nexus)
+ * Versioned so a single bad puzzle can be replaced (`-v2`) without disturbing
+ * other levels' progress. Each seed deterministically drives `generatePuzzle`,
+ * which guarantees a single unique solution at the level's difficulty.
  */
 export const LEVEL_SEEDS: Record<number, string> = Object.freeze({
   1: 'world1-level-01-v1',
@@ -97,4 +101,35 @@ export const LEVEL_SEEDS: Record<number, string> = Object.freeze({
   28: 'world1-level-28-v1',
   29: 'world1-level-29-v1',
   30: 'world1-level-30-v1',
+  // ----- World 2 · Astral Nexus (global indices 31-60) -----
+  31: 'world2-level-31-v1',
+  32: 'world2-level-32-v1',
+  33: 'world2-level-33-v1',
+  34: 'world2-level-34-v1',
+  35: 'world2-level-35-v1',
+  36: 'world2-level-36-v1',
+  37: 'world2-level-37-v1',
+  38: 'world2-level-38-v1',
+  39: 'world2-level-39-v1',
+  40: 'world2-level-40-v1',
+  41: 'world2-level-41-v1',
+  42: 'world2-level-42-v1',
+  43: 'world2-level-43-v1',
+  44: 'world2-level-44-v1',
+  45: 'world2-level-45-v1',
+  46: 'world2-level-46-v1',
+  47: 'world2-level-47-v1',
+  48: 'world2-level-48-v1',
+  49: 'world2-level-49-v1',
+  50: 'world2-level-50-v1',
+  51: 'world2-level-51-v1',
+  52: 'world2-level-52-v1',
+  53: 'world2-level-53-v1',
+  54: 'world2-level-54-v1',
+  55: 'world2-level-55-v1',
+  56: 'world2-level-56-v1',
+  57: 'world2-level-57-v1',
+  58: 'world2-level-58-v1',
+  59: 'world2-level-59-v1',
+  60: 'world2-level-60-v1',
 });

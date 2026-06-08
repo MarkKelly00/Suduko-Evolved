@@ -25,21 +25,35 @@
  */
 
 export type MapBiome =
+  // World 1 — Logic Garden
   | 'seed-gate'
   | 'moon-vine'
   | 'crystal-bed'
   | 'logic-stream'
   | 'bloom-arch'
-  | 'oracle-grove';
+  | 'oracle-grove'
+  // World 2 — Astral Nexus
+  | 'prism-causeway'
+  | 'star-archive'
+  | 'celestial-engine';
 
 export type MapLandmark =
+  // World 1 — Logic Garden
   | 'Seed Gate'
   | 'Glass Sprout Bridge'
   | 'Crystal Logic Fountain'
   | 'Moonvine Crossing'
   | 'Golden Ratio Grove'
   | 'Oracle Bloom'
-  | 'Logic Garden Temple';
+  | 'Logic Garden Temple'
+  // World 2 — Astral Nexus
+  | 'Nexus Gate'
+  | 'Prism Bridge'
+  | 'Meridian Orrery'
+  | 'Starfall Archive'
+  | 'Parallax Sanctum'
+  | 'Logic Astrolabe'
+  | 'Astral Core';
 
 export interface MapNodeLayout {
   /** Level index, 1..30. Matches `WORLD_1_LEVELS[i].index`. */
@@ -122,7 +136,15 @@ export function getNodeLayoutForLevel(level: number): MapNodeLayout | null {
 // completed segments, slightly larger blossoms, more confident landmarks.
 // Locked acts still stay dormant until their levels become unlocked.
 
-export type WorldActId = 'seed-grove' | 'moonvine-stream' | 'oracle-temple';
+export type WorldActId =
+  // World 1 — Logic Garden
+  | 'seed-grove'
+  | 'moonvine-stream'
+  | 'oracle-temple'
+  // World 2 — Astral Nexus
+  | 'prism-causeway'
+  | 'starfall-archive'
+  | 'celestial-engine';
 
 export interface WorldAct {
   id: WorldActId;

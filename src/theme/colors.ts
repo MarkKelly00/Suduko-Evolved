@@ -88,6 +88,32 @@ export const colors = {
   gardenPathLocked: 'rgba(74, 88, 120, 0.45)',
   gardenPathCompleted: 'rgba(91, 214, 168, 0.7)',
 
+  // Map / Astral Nexus — World 2 palette. Cosmic logic: violet + prism blue
+  // + starlight cyan over a deeper, colder navy than the garden, with the
+  // same warm gold core so the two worlds still feel like one product. These
+  // are additive — World 1 garden tokens above are untouched.
+  astralSky: '#0A0A1E',
+  astralSkyDeep: '#060610',
+  astralNavySecondary: '#161333',
+  astralViolet: '#9D7BFF',
+  astralVioletGlow: '#C4B5FF',
+  astralBlue: '#7BA7F2',
+  astralTeal: '#5EE7C4',
+  astralStarlight: '#BFC7FF',
+  astralGold: '#E0B96A',
+  astralGoldGlow: '#F5D58A',
+  astralFog: 'rgba(190, 200, 255, 0.08)',
+  astralNodeDormant: '#1A1533',
+  astralNodeFrost: 'rgba(190, 200, 255, 0.06)',
+  astralGridLine: 'rgba(157, 123, 255, 0.06)',
+  astralOrb: 'rgba(157, 123, 255, 0.10)',
+  astralVignette: 'rgba(6, 6, 16, 0.72)',
+  astralPathOuterGlow: 'rgba(157, 123, 255, 0.20)',
+  astralPathMid: 'rgba(123, 167, 242, 0.55)',
+  astralPathCore: '#F5D58A',
+  astralPathLocked: 'rgba(74, 88, 120, 0.45)',
+  astralPathCompleted: 'rgba(94, 231, 196, 0.70)',
+
   // Misc
   scrim: 'rgba(0, 0, 0, 0.6)',
   glassFill: 'rgba(255, 255, 255, 0.04)',

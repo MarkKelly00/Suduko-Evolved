@@ -55,7 +55,8 @@ import {
 } from '@/theme';
 
 interface Props {
-  /** When non-null the modal opens for that level index (1..30). */
+  /** When non-null the modal opens for that GLOBAL level number (1..60).
+   *  1–30 → Logic Garden, 31–60 → Astral Nexus. */
   levelIndex: number | null;
   onClose: () => void;
   onPlay: (levelIndex: number) => void;
@@ -222,7 +223,11 @@ function UnlockedBody({
   onChallengeFriend: () => void;
   onViewLeaderboard: () => void;
 }) {
-  const { yourBest, friendBest, globalBest, targets } = preview;
+  const { yourBest, friendBest, globalBest, targets, prestige, scoreToBeat } = preview;
+  const yourBestEyebrow = prestige ? 'Beat your best' : 'Your best';
+  const emptyBestSubtitle = prestige
+    ? 'The pattern waits.'
+    : 'Land a clean run to claim a star here.';
   return (
     <>
       <Header preview={preview} />
@@ -230,7 +235,7 @@ function UnlockedBody({
       {/* Your Best */}
       {yourBest ? (
         <LevelScoreCard
-          eyebrow="Your best"
+          eyebrow={yourBestEyebrow}
           title={`${yourBest.score.toLocaleString('en-US')}`}
           subtitle={`${formatTime(yourBest.timeMs)}${
             yourBest.mistakes !== undefined
@@ -248,9 +253,9 @@ function UnlockedBody({
         />
       ) : (
         <LevelScoreCard
-          eyebrow="Your best"
+          eyebrow={yourBestEyebrow}
           title="No clear yet"
-          subtitle="Land a clean run to claim a star here."
+          subtitle={emptyBestSubtitle}
           accent="gold"
         />
       )}
@@ -281,6 +286,11 @@ function UnlockedBody({
             </Text>
           </View>
         </View>
+        {scoreToBeat ? (
+          <Text style={styles.scoreToBeat}>
+            {scoreToBeat.label}: {scoreToBeat.score.toLocaleString('en-US')} to beat
+          </Text>
+        ) : null}
       </LevelScoreCard>
 
       {/* CTAs */}
@@ -289,6 +299,7 @@ function UnlockedBody({
         onPlay={onPlay}
         onChallengeFriend={onChallengeFriend}
         onViewLeaderboard={onViewLeaderboard}
+        primaryLabel={preview.reclaimCrown ? 'Reclaim Crown' : undefined}
       />
     </>
   );
@@ -304,24 +315,24 @@ function LockedBody({
   onClose: () => void;
 }) {
   const prereq = preview.prerequisiteLevelIndex;
+  const gate = preview.worldGate;
+  // A whole-world gate (entering Astral Nexus before finishing Logic Garden)
+  // reads differently from an in-world lock.
+  const title = gate
+    ? `Complete ${gate.requiredWorldName} to open the path`
+    : prereq != null
+      ? `Clear Level ${prereq} to unlock`
+      : 'Path not yet revealed';
+  const subtitle = gate
+    ? 'The Astral Nexus awaits.'
+    : preview.prestige
+      ? 'The Nexus reveals itself one pattern at a time.'
+      : 'Logic Garden opens one bloom at a time.';
   return (
     <>
       <Header preview={preview} lockedOverride />
-      <LevelScoreCard
-        eyebrow="Locked path"
-        title={
-          prereq != null
-            ? `Clear Level ${prereq} to unlock`
-            : 'Path not yet revealed'
-        }
-        subtitle="Logic Garden opens one bloom at a time."
-        accent="navy"
-      />
-      <PremiumButton
-        label="Back to map"
-        variant="primary"
-        onPress={onClose}
-      />
+      <LevelScoreCard eyebrow="Locked path" title={title} subtitle={subtitle} accent="navy" />
+      <PremiumButton label="Back to map" variant="primary" onPress={onClose} />
     </>
   );
 }
@@ -335,7 +346,7 @@ function Header({
   preview: LevelPreview;
   lockedOverride?: boolean;
 }) {
-  const { levelIndex, act, landmark, difficulty } = preview;
+  const { levelIndex, act, landmark, difficulty, prestige, worldName } = preview;
   const eyebrow = lockedOverride
     ? `Level ${levelIndex} · Locked`
     : `Level ${levelIndex} · ${formatDifficulty(difficulty as Difficulty)}`;
@@ -343,12 +354,19 @@ function Header({
     <View style={styles.header}>
       <Text style={styles.eyebrow}>{eyebrow}</Text>
       <Text
-        style={[styles.title, { color: act.primary }]}
+        style={[
+          styles.title,
+          { color: act.primary },
+          // World 2 title glows in its cosmic accent instead of the garden gold.
+          prestige ? { textShadowColor: 'rgba(157,123,255,0.5)' } : null,
+        ]}
         accessibilityRole="header"
       >
         {landmark ?? act.title}
       </Text>
-      <Text style={styles.subtitle}>{act.title}</Text>
+      <Text style={styles.subtitle}>
+        {prestige ? `${worldName} · ${act.title}` : act.title}
+      </Text>
     </View>
   );
 }
@@ -446,5 +464,13 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.bold,
     letterSpacing: letterSpacing.tight,
     marginTop: 2,
+  },
+  scoreToBeat: {
+    color: colors.accentGoldGlow,
+    fontSize: fontSize.xs,
+    letterSpacing: letterSpacing.wide,
+    fontWeight: fontWeight.semibold,
+    marginTop: spacing.sm,
+    textAlign: 'center',
   },
 });

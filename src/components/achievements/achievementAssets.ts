@@ -60,6 +60,17 @@ export const ACHIEVEMENT_ASSETS: Partial<Record<string, ImageSourcePropType>> = 
   friendly_challenge: require('../../../assets/achievements/friendly_challenge.png'),
   no_hints_needed: require('../../../assets/achievements/no_hints_needed.png'),
   take_a_breath: require('../../../assets/achievements/take_a_breath.png'),
+  // ── World 2 — Astral Nexus ──
+  // The PNGs don't exist yet and Metro fails on a require() of a missing file,
+  // so these stay commented until the art is generated. Run:
+  //   XAI_API_KEY=… node scripts/generate-achievement-icons.mjs --id astral_nexus_unlocked
+  //   XAI_API_KEY=… node scripts/generate-achievement-icons.mjs --id astral_nexus_complete
+  //   XAI_API_KEY=… node scripts/generate-achievement-icons.mjs --id astral_core_perfect
+  // then UNCOMMENT the three lines below. Until then, <AchievementGlyph>
+  // renders the tier-coloured placeholder, so the gallery still works.
+  // astral_nexus_unlocked: require('../../../assets/achievements/astral_nexus_unlocked.png'),
+  // astral_nexus_complete: require('../../../assets/achievements/astral_nexus_complete.png'),
+  // astral_core_perfect: require('../../../assets/achievements/astral_core_perfect.png'),
 };
 
 /** Look up the bundled asset for an achievement, or `null` if missing. */

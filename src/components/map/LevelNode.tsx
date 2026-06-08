@@ -36,6 +36,14 @@ interface Props {
   /** Optional override: marks the node as a milestone that earns extra
    *  visual weight (used near landmark levels). */
   variant?: 'default' | 'milestone';
+  /** Optional per-world tint for the UNLOCKED (available, not-yet-played)
+   *  state. World 2 passes its cosmic violet set; omitting it keeps the
+   *  Logic Garden cyan exactly as before. Current (gold) + completed (green)
+   *  stay universal across worlds. */
+  unlockedAccent?: { border: string; glow: string; halo: string; text: string };
+  /** Extra context appended to the VoiceOver label, e.g. "World 2, Starfall
+   *  Archive". Yields "Level 42, World 2, Starfall Archive, unlocked, 2 stars". */
+  accessibilityContext?: string;
 }
 
 /**
@@ -63,6 +71,8 @@ export function LevelNode({
   size = 64,
   isNewlyUnlocked = false,
   variant = 'default',
+  unlockedAccent,
+  accessibilityContext,
 }: Props) {
   const reducedMotion = useSettingsStore((s) => s.reducedMotion);
   const highContrast = useSettingsStore((s) => s.highContrast);
@@ -136,7 +146,7 @@ export function LevelNode({
     onPress();
   };
 
-  const palette = paletteFor(state, highContrast);
+  const palette = paletteFor(state, highContrast, unlockedAccent);
   const isMilestone = variant === 'milestone';
   const milestoneScale = isMilestone ? 1.08 : 1;
   const total = size * milestoneScale;
@@ -187,7 +197,7 @@ export function LevelNode({
       <Animated.View style={[shakeStyle, { width: total, height: total }]}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={describe(index, state, stars, crown)}
+          accessibilityLabel={describe(index, state, stars, crown, accessibilityContext)}
           onPress={handlePress}
           style={({ pressed }) => [
             styles.bevel,
@@ -278,7 +288,11 @@ interface NodePalette {
   haloBg: string;
 }
 
-function paletteFor(state: LevelNodeState, highContrast: boolean): NodePalette {
+function paletteFor(
+  state: LevelNodeState,
+  highContrast: boolean,
+  unlockedAccent?: { border: string; glow: string; halo: string; text: string },
+): NodePalette {
   switch (state) {
     case 'locked':
       return {
@@ -293,12 +307,12 @@ function paletteFor(state: LevelNodeState, highContrast: boolean): NodePalette {
     case 'unlocked':
       return {
         fill: colors.gardenNavySecondary,
-        border: colors.gardenCyanGlow,
-        text: highContrast ? colors.text : colors.gardenCyanGlow,
+        border: unlockedAccent?.border ?? colors.gardenCyanGlow,
+        text: highContrast ? colors.text : (unlockedAccent?.text ?? colors.gardenCyanGlow),
         highlight: 'rgba(245,213,138,0.18)',
         shadow: 'rgba(7,11,23,0.55)',
-        glow: 'rgba(0,229,204,0.45)',
-        haloBg: 'rgba(0,229,204,0.18)',
+        glow: unlockedAccent?.glow ?? 'rgba(0,229,204,0.45)',
+        haloBg: unlockedAccent?.halo ?? 'rgba(0,229,204,0.18)',
       };
     case 'current':
       return {
@@ -323,8 +337,14 @@ function paletteFor(state: LevelNodeState, highContrast: boolean): NodePalette {
   }
 }
 
-function describe(index: number, state: LevelNodeState, stars: number, crown: boolean): string {
-  const base = `Level ${index}`;
+function describe(
+  index: number,
+  state: LevelNodeState,
+  stars: number,
+  crown: boolean,
+  context?: string,
+): string {
+  const base = context ? `Level ${index}, ${context}` : `Level ${index}`;
   if (state === 'locked') return `${base}, locked`;
   if (state === 'current') return `${base}, current`;
   if (state === 'completed') {

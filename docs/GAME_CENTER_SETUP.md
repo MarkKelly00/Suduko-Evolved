@@ -44,7 +44,16 @@ App Store Connect → **My Apps** → Sudoku Evolved → **Services** →
 recent screenshot showing "Game Center checked, Multiplayer
 Compatibility v1.0").
 
-### 2.1 Add the 6 leaderboards
+> ⚠️ **World 2 (Astral Nexus) IDs are gated.** The 2 Astral Nexus
+> leaderboards and 3 achievements below are wired in code but kept OUT of
+> the `REGISTERED_LEADERBOARD_IDS` / `REGISTERED_ACHIEVEMENT_IDS` allowlists
+> in `gameCenterIds.ts`, so the app sends NOTHING to them. After you create
+> them in App Store Connect, move them from the "pending" comments into those
+> two sets — that single edit flips World 2 Game Center live. Until then, all
+> World 2 progression, leaderboards-via-Supabase, and in-app achievements work
+> normally; only the native Game Center mirror waits.
+
+### 2.1 Add the 8 leaderboards
 
 For each row below, add via App Store Connect → **Leaderboards** →
 **+**, fill the fields, and save. The IDs **must match exactly** —
@@ -61,6 +70,8 @@ and submitted from
 | Best Duel Score       | `com.sudokuevolved.leaderboard.duel_best_score`                 | High to Low  | Integer                       |
 | Logic Garden Stars    | `com.sudokuevolved.leaderboard.logic_garden_stars`              | High to Low  | Integer (max 90)              |
 | Logic Garden Crowns   | `com.sudokuevolved.leaderboard.logic_garden_crowns`             | High to Low  | Integer (max 30)              |
+| Astral Nexus Stars    | `com.sudokuevolved.leaderboard.astral_nexus_stars`              | High to Low  | Integer (max 90)              |
+| Astral Nexus Crowns   | `com.sudokuevolved.leaderboard.astral_nexus_crowns`            | High to Low  | Integer (max 30)              |
 
 For each leaderboard add the localizations:
 - **Default language**: English (U.S.)
@@ -74,14 +85,14 @@ For each leaderboard add the localizations:
 > have to deprecate the ID and create a new one. Triple-check before
 > saving.
 
-### 2.2 Add the 20 achievements
+### 2.2 Add the 23 achievements
 
 App Store Connect → **Achievements** → **+**. Same exact-match rule
-on IDs. Total point sum **must equal 800**
-(`src/services/gameCenter/gameCenterIds.ts` enforces this in
+on IDs. Total point sum **must equal 910** — World 1's 800 plus Astral
+Nexus's 110 (`src/services/gameCenter/gameCenterIds.ts` enforces this in
 `ACHIEVEMENT_POINTS` and the test in
-`__tests__/services/gameCenter/achievementRules.test.ts` will fail if
-the sum drifts).
+`src/services/gameCenter/__tests__/achievementRules.test.ts` will fail if
+the sum drifts). Apple's per-app cap is 1000, leaving 90 of headroom.
 
 | Reference Name           | ID                                                           | Points |
 | ------------------------ | ------------------------------------------------------------ | -----: |
@@ -105,7 +116,10 @@ the sum drifts).
 | Perfect Harmony          | `com.sudokuevolved.achievement.perfect_harmony`              |     50 |
 | No Hints Needed          | `com.sudokuevolved.achievement.no_hints_needed`              |     25 |
 | Take a Breath            | `com.sudokuevolved.achievement.take_a_breath`                |     10 |
-| **Total**                |                                                              |  **800** |
+| Astral Nexus Unlocked    | `com.sudokuevolved.achievement.astral_nexus_unlocked`        |     20 |
+| Astral Nexus Complete    | `com.sudokuevolved.achievement.astral_nexus_complete`        |     40 |
+| Astral Core Perfect      | `com.sudokuevolved.achievement.astral_core_perfect`          |     50 |
+| **Total**                |                                                              |  **910** |
 
 For each achievement set:
 - **Hidden / visible**: Visible (default). The Logic Garden /
@@ -137,6 +151,9 @@ limits.
 | Crown Garden           | Earn all 30 crowns.                                            |
 | Lightning Solve        | Clear a 3-Minute Sprint puzzle.                                |
 | Perfect Sprint         | Clear a Sprint with no mistakes and no hints.                  |
+| Astral Nexus Unlocked  | Cross the threshold into the Astral Nexus.                     |
+| Astral Nexus Complete  | Clear all 30 levels of the Astral Nexus.                       |
+| Astral Core Perfect    | Crown the Astral Core — the final level.                       |
 | First Duel             | Finish your first online duel.                                 |
 | Logic Rival            | Win your first online duel.                                    |
 | Perfect Rivalry        | Win a duel with a crown / perfect solve.                       |

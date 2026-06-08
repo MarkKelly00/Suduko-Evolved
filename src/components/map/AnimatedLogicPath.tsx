@@ -42,7 +42,6 @@ import {
   type SharedValue,
 } from 'react-native-reanimated';
 import { useSettingsStore } from '@/game/state/useSettingsStore';
-import { colors } from '@/theme';
 import {
   WORLD_1_ACTS,
   WORLD_1_NODE_LAYOUT,
@@ -50,6 +49,7 @@ import {
   type MapNodeLayout,
   type WorldAct,
 } from './mapLayout';
+import { WORLD_1_THEME, type WorldTheme } from './worldThemes';
 import {
   buildPathSegments,
   computePathProgress,
@@ -69,6 +69,16 @@ interface Props {
   isUnlocked: (level: number) => boolean;
   /** Returns true if the level is the player's current frontier. */
   isCurrent: (level: number) => boolean;
+  /** Node layout to trace. Defaults to World 1 so existing call sites are
+   *  unchanged; World 2 passes its globalized layout. */
+  layout?: readonly MapNodeLayout[];
+  /** Acts for per-act completed-segment tinting. Defaults to World 1. */
+  acts?: readonly WorldAct[];
+  /** Resolves the act for a (global) level. Defaults to World 1's resolver. */
+  actForLevel?: (level: number) => WorldAct;
+  /** Palette. Defaults to the Logic Garden theme (identical to the legacy
+   *  hard-coded `colors.gardenPath*` values). */
+  theme?: WorldTheme;
 }
 
 const STROKE_WIDTHS = {
@@ -111,18 +121,22 @@ export function AnimatedLogicPath({
   isCompleted,
   isUnlocked,
   isCurrent,
+  layout = WORLD_1_NODE_LAYOUT,
+  acts = WORLD_1_ACTS,
+  actForLevel = getWorldActForLevel,
+  theme = WORLD_1_THEME,
 }: Props) {
   const reducedMotion = useSettingsStore((s) => s.reducedMotion);
 
   // 29 segments shared by every sub-path.
   const segments = useMemo(
-    () => buildPathSegments(WORLD_1_NODE_LAYOUT, width),
-    [width],
+    () => buildPathSegments(layout, width),
+    [layout, width],
   );
 
   const progress = useMemo(
-    () => computePathProgress(WORLD_1_NODE_LAYOUT as readonly MapNodeLayout[], isCompleted, isUnlocked, isCurrent),
-    [isCompleted, isUnlocked, isCurrent],
+    () => computePathProgress(layout, isCompleted, isUnlocked, isCurrent),
+    [layout, isCompleted, isUnlocked, isCurrent],
   );
 
   // Pre-build the three sub-paths. Memoized so repaints only happen when
@@ -146,25 +160,25 @@ export function AnimatedLogicPath({
   // to moonvine-stream, etc.).
   const completedActPaths = useMemo(() => {
     const out: { act: WorldAct; path: SkPath }[] = [];
-    for (const act of WORLD_1_ACTS) {
+    for (const act of acts) {
       const sliceForAct = segments.filter((seg, idx) => {
         if (idx > progress.completedThrough) return false;
-        const toLevel = WORLD_1_NODE_LAYOUT[idx + 1]?.level ?? 0;
-        return getWorldActForLevel(toLevel).id === act.id;
+        const toLevel = layout[idx + 1]?.level ?? 0;
+        return actForLevel(toLevel).id === act.id;
       });
       out.push({ act, path: buildSubPath(sliceForAct, yOffset) });
     }
     return out;
-  }, [segments, progress.completedThrough, yOffset]);
+  }, [acts, actForLevel, layout, segments, progress.completedThrough, yOffset]);
 
   // Current segment act drives the traveling pulse colour. Falls back
-  // to gold-glow for the first segment when there's no current frontier.
+  // to the theme's bright path core when there's no current frontier.
   const currentSegAct = useMemo<WorldAct | null>(() => {
     if (progress.currentSegment == null) return null;
-    const toLevel = WORLD_1_NODE_LAYOUT[progress.currentSegment + 1]?.level ?? 0;
-    return getWorldActForLevel(toLevel);
-  }, [progress.currentSegment]);
-  const pulseColor = currentSegAct?.accent ?? colors.gardenGoldGlow;
+    const toLevel = layout[progress.currentSegment + 1]?.level ?? 0;
+    return actForLevel(toLevel);
+  }, [actForLevel, layout, progress.currentSegment]);
+  const pulseColor = currentSegAct?.accent ?? theme.pathCore;
 
   // Traveling pulse: a phase 0..1 cycling along the current segment.
   // Stays at a stationary "head of segment" position when reduced motion
@@ -221,7 +235,7 @@ export function AnimatedLogicPath({
             strokeWidth={STROKE_WIDTHS.outerGlow}
             strokeCap="round"
             strokeJoin="round"
-            color={colors.gardenPathOuterGlow}
+            color={theme.pathOuterGlow}
           />
 
           {/* Layer 2 — the dim locked tail. Drawn over the outer glow so
@@ -232,7 +246,7 @@ export function AnimatedLogicPath({
             strokeWidth={STROKE_WIDTHS.locked}
             strokeCap="round"
             strokeJoin="round"
-            color={colors.gardenPathLocked}
+            color={theme.pathLocked}
           />
 
           {/* Layer 3 — mid cyan stroke on the FULL path. This is the
@@ -243,7 +257,7 @@ export function AnimatedLogicPath({
             strokeWidth={STROKE_WIDTHS.mid}
             strokeCap="round"
             strokeJoin="round"
-            color={colors.gardenPathMid}
+            color={theme.pathMid}
           />
 
           {/* Layer 4 — completed segments overlaid in brighter green, so
@@ -254,7 +268,7 @@ export function AnimatedLogicPath({
             strokeWidth={STROKE_WIDTHS.mid}
             strokeCap="round"
             strokeJoin="round"
-            color={colors.gardenPathCompleted}
+            color={theme.pathCompleted}
           />
 
           {/* Layer 4b — per-act tint on completed segments. Each act
@@ -282,7 +296,7 @@ export function AnimatedLogicPath({
             strokeWidth={STROKE_WIDTHS.core}
             strokeCap="round"
             strokeJoin="round"
-            color={colors.gardenPathCore}
+            color={theme.pathCore}
             opacity={0.85}
           />
 

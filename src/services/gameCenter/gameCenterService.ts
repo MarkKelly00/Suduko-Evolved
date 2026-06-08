@@ -35,6 +35,10 @@ import {
   isPlatformIOS,
 } from './gameCenterAvailability';
 import {
+  isAchievementRegistered,
+  isLeaderboardRegistered,
+} from './gameCenterIds';
+import {
   drainQueue,
   enqueueAchievement,
   enqueueScore,
@@ -267,6 +271,13 @@ export async function submitScore(
   if (!isOptedIn()) {
     return { ok: true, delivered: false, reason: 'opted-out' };
   }
+  if (!isLeaderboardRegistered(submission.leaderboardId)) {
+    // The id isn't created in App Store Connect yet (e.g. an Astral Nexus
+    // leaderboard before the operator registers it). No submit, and NO
+    // enqueue — we never want to retry a submission to a non-existent id.
+    devWarn('skipping unregistered leaderboard', submission.leaderboardId);
+    return { ok: true, delivered: false, reason: 'unregistered' };
+  }
   if (!isNativeModuleLoaded()) {
     enqueueScore(submission);
     return { ok: true, delivered: false, queued: true, reason: 'unavailable' };
@@ -296,6 +307,11 @@ export async function reportAchievement(
   }
   if (!isOptedIn()) {
     return { ok: true, delivered: false, reason: 'opted-out' };
+  }
+  if (!isAchievementRegistered(submission.achievementId)) {
+    // Not yet created in App Store Connect — skip without enqueueing.
+    devWarn('skipping unregistered achievement', submission.achievementId);
+    return { ok: true, delivered: false, reason: 'unregistered' };
   }
   if (!isNativeModuleLoaded()) {
     enqueueAchievement(submission);

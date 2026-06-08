@@ -26,10 +26,12 @@
 import { getStorage } from '@/services/persistence/storage';
 import {
   buildCampaignTotalsSubmissions,
+  buildWorld2TotalsSubmissions,
   buildDuelSubmissions,
   buildSprintSubmissions,
   gameCenterService,
   type CampaignTotalsInput,
+  type World2TotalsInput,
   type DuelResultInput,
   type SprintResultInput,
   type SubmissionOutcome,
@@ -99,6 +101,39 @@ export function deriveCampaignTotals(
   };
 }
 
+// ─── World 2 (Astral Nexus) totals ───────────────────────────────────────────
+
+const WORLD2_LEVEL_ID_REGEX = /^world2-level-(\d+)$/;
+
+export interface World2TotalsSnapshot {
+  totalStars: number;
+  totalCrowns: number;
+  /** 0..30 World 2 levels cleared. */
+  clearedCount: number;
+}
+
+/** Compute World 2 stars/crowns/clearedCount from a progress-store `levels`
+ *  map. Mirrors `deriveCampaignTotals` but for the `world2-level-N` (31–60)
+ *  pattern — kept separate because the Astral Nexus leaderboards/achievements
+ *  must not mix with World 1's. */
+export function deriveWorld2Totals(
+  levels: Record<string, { stars: 1 | 2 | 3; crown: boolean }>,
+): World2TotalsSnapshot {
+  let totalStars = 0;
+  let totalCrowns = 0;
+  let clearedCount = 0;
+  for (const [id, entry] of Object.entries(levels)) {
+    const m = WORLD2_LEVEL_ID_REGEX.exec(id);
+    if (!m) continue;
+    const level = parseInt(m[1]!, 10);
+    if (!Number.isFinite(level) || level < 31 || level > 60) continue;
+    totalStars += entry.stars;
+    clearedCount += 1;
+    if (entry.crown) totalCrowns += 1;
+  }
+  return { totalStars, totalCrowns, clearedCount };
+}
+
 // ─── Campaign ──────────────────────────────────────────────────────────────
 
 export interface CampaignFlowInput extends CampaignTotalsInput {
@@ -152,6 +187,57 @@ export async function submitCampaignResult(
 
   const [scores, achievements] = await Promise.all([
     gameCenterService.submitScores(buildCampaignTotalsSubmissions(input)),
+    reportAchievementsWithProgress(evaluateAll(events)),
+  ]);
+  return { scores, achievements };
+}
+
+// ─── World 2 / Astral Nexus ──────────────────────────────────────────────────
+
+export interface World2FlowInput extends World2TotalsInput {
+  /** 31–60. The completed Astral Nexus level. */
+  level: number;
+  /** Did the player earn a crown on this run? */
+  isCrown: boolean;
+  /** Hints used during the run; 0 unlocks NO_HINTS_NEEDED (cross-world). */
+  hintsUsed: number;
+  /** 0..30 World 2 levels cleared (post-completion). */
+  clearedCount: number;
+  /** Optional: regions completed by the final placement; >= 3 → PERFECT_HARMONY. */
+  multiRegionCount?: number;
+  /** Optional: did the player pause and resume during the run? */
+  pausedDuringRun?: boolean;
+}
+
+/**
+ * Game Center submission for an Astral Nexus level completion. Distinct from
+ * `submitCampaignResult`:
+ *   • Drives the Astral Nexus stars/crowns leaderboards (not Logic Garden's).
+ *   • Fires ASTRAL_NEXUS_UNLOCKED / ASTRAL_NEXUS_COMPLETE / ASTRAL_CORE_PERFECT.
+ *   • Still fires the world-agnostic SKILL achievements (crown, no-hint,
+ *     multi-region, pause-and-resume) so they accrue in either world.
+ * The Astral Nexus leaderboard/achievement ids stay inert until the operator
+ * registers them in App Store Connect (the service skips unregistered ids).
+ */
+export async function submitWorld2Result(
+  input: World2FlowInput,
+): Promise<SubmitFlowResult> {
+  const events: AchievementEvent[] = [
+    { kind: 'world2ProgressUpdated', unlocked: true, clearedCount: input.clearedCount },
+  ];
+  if (input.level === 60 && input.isCrown) {
+    events.push({ kind: 'astralCorePerfect' });
+  }
+  // Cross-world skill achievements still count in World 2.
+  if (input.isCrown) events.push({ kind: 'crownEarned' });
+  if (input.hintsUsed === 0) events.push({ kind: 'noHintClear' });
+  if (input.multiRegionCount && input.multiRegionCount >= 3) {
+    events.push({ kind: 'multiRegionCompletion', regionCount: input.multiRegionCount });
+  }
+  if (input.pausedDuringRun) events.push({ kind: 'pausedAndCompleted' });
+
+  const [scores, achievements] = await Promise.all([
+    gameCenterService.submitScores(buildWorld2TotalsSubmissions(input)),
     reportAchievementsWithProgress(evaluateAll(events)),
   ]);
   return { scores, achievements };

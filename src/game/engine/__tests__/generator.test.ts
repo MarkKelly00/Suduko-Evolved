@@ -4,7 +4,7 @@ import { generatePuzzle } from '../sudokuGenerator';
 import { countSolutions, solvePuzzle } from '../sudokuSolver';
 import { LEVEL_SEEDS } from '../puzzleSeeds';
 
-const DIFFICULTIES: Difficulty[] = ['tutorial', 'easy', 'medium', 'hard'];
+const DIFFICULTIES: Difficulty[] = ['tutorial', 'easy', 'medium', 'hard', 'expert'];
 const SEEDS = ['seedA', 'seedB', 'world1-level-01-v1', 'a-different-seed', 'final'];
 
 function isStructurallyValidSolution(g: Grid): boolean {

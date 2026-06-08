@@ -20,6 +20,10 @@ interface Props {
   onPlay: () => void;
   onChallengeFriend: () => void;
   onViewLeaderboard: () => void;
+  /** Overrides the primary CTA label. Used for "Reclaim Crown" when a rival
+   *  now leads a level the player had crowned. Defaults to the
+   *  Play Level / Play again copy. */
+  primaryLabel?: string;
 }
 
 export function LevelCTAStack({
@@ -27,11 +31,12 @@ export function LevelCTAStack({
   onPlay,
   onChallengeFriend,
   onViewLeaderboard,
+  primaryLabel,
 }: Props) {
   return (
     <View style={styles.stack}>
       <PremiumButton
-        label={isCompleted ? 'Play again' : 'Play Level'}
+        label={primaryLabel ?? (isCompleted ? 'Play again' : 'Play Level')}
         variant="primary"
         onPress={onPlay}
         accessibilityHint="Closes this preview and starts the puzzle."

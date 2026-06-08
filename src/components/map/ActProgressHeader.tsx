@@ -16,19 +16,15 @@
  * (driven by a Reanimated derived JS hand-off — small).
  */
 import React, { useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import {
   useAnimatedReaction,
   type SharedValue,
   runOnJS,
 } from 'react-native-reanimated';
-import {
-  WORLD_1_ACTS,
-  WORLD_1_NODE_LAYOUT,
-  type WorldAct,
-} from './mapLayout';
+import { getActBuckets, type ActBucket } from './worldRegistry';
 import { useProgressStore } from '@/game/state/useProgressStore';
-import { levelId as makeLevelId } from '@/game/content/levels';
+import { levelIdForGlobal } from '@/game/content/levels';
 import {
   colors,
   fontFamily,
@@ -51,24 +47,12 @@ interface Props {
   bottom: number;
 }
 
-interface ActBucket {
-  act: WorldAct;
-  index: number; // 0..2
-  yMidpoint: number;
-}
-
 export function ActProgressHeader({ scrollY, bottom }: Props) {
-  // Compute each act's vertical midpoint once. Used by the scroll
-  // reaction to decide which act the viewport is currently inside.
-  const buckets = useMemo<ActBucket[]>(() => {
-    return WORLD_1_ACTS.map((act, i) => {
-      const fromY =
-        WORLD_1_NODE_LAYOUT.find((n) => n.level === act.fromLevel)?.y ?? 0;
-      const toY =
-        WORLD_1_NODE_LAYOUT.find((n) => n.level === act.toLevel)?.y ?? fromY;
-      return { act, index: i, yMidpoint: (fromY + toY) / 2 };
-    });
-  }, []);
+  const { width } = useWindowDimensions();
+  // Act buckets across every enabled world (3 for World 1; 6 once Astral
+  // Nexus is on). Midpoints are in GLOBAL scroll coords so the band flips as
+  // the player scrolls down through both worlds.
+  const buckets = useMemo<ActBucket[]>(() => getActBuckets(), []);
 
   const [activeIndex, setActiveIndex] = useState(0);
 
@@ -89,35 +73,39 @@ export function ActProgressHeader({ scrollY, bottom }: Props) {
     [buckets],
   );
 
-  const active = buckets[activeIndex] ?? buckets[0];
-  if (!active) return null;
-  const { act } = active;
+  const active = buckets[activeIndex] ?? buckets[0]!;
 
   // Lightweight per-act stats from the local progress store. Reads on
-  // every render of the header — cheap (range of 10 levels per act).
+  // every render of the header — cheap (range of 10 levels per act). Hooks
+  // run unconditionally (buckets always has ≥1 entry, so `active` is defined).
   const levelEntries = useProgressStore((s) => s.levels);
+  const fromGlobal = active.fromGlobal;
+  const toGlobal = active.toGlobal;
   const stats = useMemo(() => {
     let cleared = 0;
     let stars = 0;
     let crowns = 0;
-    for (let lvl = act.fromLevel; lvl <= act.toLevel; lvl++) {
-      const entry = levelEntries[makeLevelId(lvl)];
+    for (let lvl = fromGlobal; lvl <= toGlobal; lvl++) {
+      const entry = levelEntries[levelIdForGlobal(lvl)];
       if (entry) {
         cleared += 1;
         stars += entry.stars;
         if (entry.crown) crowns += 1;
       }
     }
-    const total = act.toLevel - act.fromLevel + 1;
+    const total = toGlobal - fromGlobal + 1;
     return { cleared, total, stars, crowns };
-  }, [levelEntries, act.fromLevel, act.toLevel]);
+  }, [levelEntries, fromGlobal, toGlobal]);
+
+  const { act } = active;
+  const roman = ROMAN[active.actIndexInWorld + 1] ?? `${active.actIndexInWorld + 1}`;
 
   return (
     <View
       style={[styles.band, { bottom }]}
       pointerEvents="none"
       accessibilityRole="header"
-      accessibilityLabel={`Act ${ROMAN[active.index + 1]}, ${act.title}, ${stats.cleared} of ${stats.total} cleared`}
+      accessibilityLabel={`${active.worldName}, Act ${roman}, ${act.title}, ${stats.cleared} of ${stats.total} cleared`}
     >
       <View
         style={[
@@ -125,11 +113,12 @@ export function ActProgressHeader({ scrollY, bottom }: Props) {
           {
             borderColor: act.primary,
             shadowColor: act.primary,
+            maxWidth: width - spacing.lg * 2,
           },
         ]}
       >
-        <Text style={[styles.eyebrow, { color: act.primary }]}>
-          ACT {ROMAN[active.index + 1]}
+        <Text style={[styles.eyebrow, { color: act.primary }]} numberOfLines={1}>
+          {active.worldName.toUpperCase()} · ACT {roman}
         </Text>
         <Text
           style={[styles.title, { color: act.primary }]}
@@ -153,14 +142,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   pill: {
-    backgroundColor: 'rgba(11,18,32,0.78)',
+    backgroundColor: 'rgba(11,18,32,0.82)',
     borderWidth: 1,
-    borderRadius: radius.pill,
+    borderRadius: radius.lg,
     paddingHorizontal: spacing.base,
-    paddingVertical: 6,
-    flexDirection: 'row',
+    paddingVertical: spacing.sm,
+    // Centered vertical stack: eyebrow / act title / stats. Stacking (rather
+    // than a single row) keeps long act names like "Oracle Bloom Temple" and
+    // "Celestial Engine" from overflowing the screen edges.
+    flexDirection: 'column',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: 2,
     shadowOpacity: 0.3,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 0 },
@@ -169,17 +161,20 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xxs,
     fontWeight: fontWeight.bold,
     letterSpacing: letterSpacing.wider,
+    textAlign: 'center',
   },
   title: {
     fontFamily: fontFamily.display,
-    fontSize: fontSize.sm,
+    fontSize: fontSize.md,
     fontWeight: fontWeight.bold,
     letterSpacing: letterSpacing.tight,
+    textAlign: 'center',
   },
   stats: {
     color: colors.textMuted,
     fontSize: fontSize.xxs,
     letterSpacing: letterSpacing.wide,
     fontWeight: fontWeight.medium,
+    textAlign: 'center',
   },
 });

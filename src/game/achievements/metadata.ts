@@ -18,6 +18,7 @@ import {
 
 export type AchievementCategory =
   | 'campaign'
+  | 'nexus'
   | 'sprint'
   | 'duels'
   | 'social'
@@ -147,10 +148,28 @@ export const ACHIEVEMENT_METADATA: Readonly<
     description: 'Pause mid-puzzle and finish the level when you return.',
     category: 'mindfulness',
   },
+  // ── World 2 — Astral Nexus ──
+  [A.ASTRAL_NEXUS_UNLOCKED]: {
+    name: 'Astral Nexus Unlocked',
+    description: 'Cross the threshold into the Astral Nexus.',
+    category: 'nexus',
+  },
+  [A.ASTRAL_NEXUS_COMPLETE]: {
+    name: 'Astral Nexus Complete',
+    description: 'Clear all 30 levels of the Astral Nexus.',
+    category: 'nexus',
+    progressLabel: '30 levels',
+  },
+  [A.ASTRAL_CORE_PERFECT]: {
+    name: 'Astral Core Perfect',
+    description: 'Crown the Astral Core — the final level.',
+    category: 'nexus',
+  },
 };
 
 export const CATEGORY_LABELS: Readonly<Record<AchievementCategory, string>> = {
   campaign: 'Campaign',
+  nexus: 'Astral Nexus',
   sprint: 'Sprint',
   duels: 'Duels',
   social: 'Social',
@@ -161,6 +180,7 @@ export const CATEGORY_LABELS: Readonly<Record<AchievementCategory, string>> = {
 /** Ordered list used by the gallery; campaign first, mindfulness last. */
 export const CATEGORY_ORDER: readonly AchievementCategory[] = [
   'campaign',
+  'nexus',
   'sprint',
   'duels',
   'social',

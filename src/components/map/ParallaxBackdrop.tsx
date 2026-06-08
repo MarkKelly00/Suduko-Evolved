@@ -30,6 +30,7 @@ import {
 import { useDerivedValue, type SharedValue } from 'react-native-reanimated';
 import { useSettingsStore } from '@/game/state/useSettingsStore';
 import { colors } from '@/theme';
+import type { WorldTheme } from './worldThemes';
 
 interface Props {
   /** Viewport width in pixels. */
@@ -38,6 +39,18 @@ interface Props {
   height: number;
   /** Reanimated SharedValue carrying the live ScrollView offsetY. */
   scrollY: SharedValue<number>;
+  /**
+   * Optional World 2 atmosphere cross-fade. When provided, a cosmic backdrop
+   * layer fades in as `scrollY` crosses [startY, endY] — smoothly morphing the
+   * Logic Garden teal/gold sky into the Astral Nexus violet/cyan/gold sky. The
+   * shift is position-driven (not motion), so it still applies under reduced
+   * motion. Omit entirely → World 1 backdrop renders exactly as before.
+   */
+  world2?: {
+    startY: number;
+    endY: number;
+    theme: WorldTheme;
+  };
 }
 
 /** Parallax factor: how much the backdrop translates per pixel of
@@ -63,7 +76,7 @@ const ORBS: { x: number; y: number; radius: number; opacity: number; tint: strin
  *  390-wide phone — enough to imply structure without crosshatching. */
 const GRID_SPACING = 80;
 
-export function ParallaxBackdrop({ width, height, scrollY }: Props) {
+export function ParallaxBackdrop({ width, height, scrollY, world2 }: Props) {
   const reducedMotion = useSettingsStore((s) => s.reducedMotion);
 
   // Backdrop transform = vertical translation only. Wrapped in a derived
@@ -76,6 +89,30 @@ export function ParallaxBackdrop({ width, height, scrollY }: Props) {
     // ScrollView reports a positive scroll offset for downward scroll.
     return [{ translateY: -scrollY.value * factor }];
   }, [scrollY, reducedMotion]);
+
+  // Atmosphere cross-fade progress 0..1 as the player scrolls into World 2.
+  const startY = world2?.startY ?? 0;
+  const endY = world2?.endY ?? 1;
+  const cosmicT = useDerivedValue(() => {
+    'worklet';
+    if (!world2) return 0;
+    const span = Math.max(1, endY - startY);
+    const t = (scrollY.value - startY) / span;
+    return t < 0 ? 0 : t > 1 ? 1 : t;
+  }, [scrollY, startY, endY, world2]);
+  const gardenAtmosphere = useDerivedValue(() => 1 - cosmicT.value, [cosmicT]);
+
+  // Cosmic orb pixel positions (only used when world2 is provided).
+  const cosmicOrbs = useMemo(() => {
+    if (!world2) return [];
+    return ORBS.map((o, i) => ({
+      cx: o.x * width,
+      cy: o.y * height,
+      r: o.radius,
+      opacity: o.opacity,
+      tint: world2.theme.orbTints[i % world2.theme.orbTints.length]!,
+    }));
+  }, [width, height, world2]);
 
   // Pre-compute pixel positions for orbs + grid so the worklet doesn't
   // have to.
@@ -124,6 +161,18 @@ export function ParallaxBackdrop({ width, height, scrollY }: Props) {
           />
         </Rect>
 
+        {/* Cosmic base — cross-fades in over the garden sky as the player
+            scrolls into World 2. Opacity is the scroll-driven cosmicT. */}
+        {world2 ? (
+          <Rect x={0} y={0} width={width} height={height} opacity={cosmicT}>
+            <RadialGradient
+              c={vec(width * 0.5, height * 0.42)}
+              r={Math.max(width, height) * 0.85}
+              colors={[world2.theme.backgroundGradientTop, world2.theme.backgroundGradientBottom]}
+            />
+          </Rect>
+        ) : null}
+
         {/* The parallaxed layer — grid + orbs travel with scrollY but
             slower than the world stage. */}
         <Group transform={transform}>
@@ -151,16 +200,33 @@ export function ParallaxBackdrop({ width, height, scrollY }: Props) {
           ))}
 
           {/* Distant bioluminescent orbs — radial gradient so the edge
-              feathers naturally without any blur shader cost. */}
-          {orbs.map((o, i) => (
-            <Circle key={`orb-${i}`} cx={o.cx} cy={o.cy} r={o.r} opacity={o.opacity}>
-              <RadialGradient
-                c={vec(o.cx, o.cy)}
-                r={o.r}
-                colors={[o.tint, 'rgba(0,0,0,0)']}
-              />
-            </Circle>
-          ))}
+              feathers naturally without any blur shader cost. When World 2 is
+              in play, the garden orbs fade out (gardenAtmosphere) as the cosmic
+              orbs fade in (cosmicT), so the sky never shows both at once. */}
+          <Group opacity={world2 ? gardenAtmosphere : undefined}>
+            {orbs.map((o, i) => (
+              <Circle key={`orb-${i}`} cx={o.cx} cy={o.cy} r={o.r} opacity={o.opacity}>
+                <RadialGradient
+                  c={vec(o.cx, o.cy)}
+                  r={o.r}
+                  colors={[o.tint, 'rgba(0,0,0,0)']}
+                />
+              </Circle>
+            ))}
+          </Group>
+          {world2 ? (
+            <Group opacity={cosmicT}>
+              {cosmicOrbs.map((o, i) => (
+                <Circle key={`corb-${i}`} cx={o.cx} cy={o.cy} r={o.r} opacity={o.opacity}>
+                  <RadialGradient
+                    c={vec(o.cx, o.cy)}
+                    r={o.r}
+                    colors={[o.tint, 'rgba(0,0,0,0)']}
+                  />
+                </Circle>
+              ))}
+            </Group>
+          ) : null}
         </Group>
 
         {/* Top + bottom vignette — reads as atmospheric depth without a

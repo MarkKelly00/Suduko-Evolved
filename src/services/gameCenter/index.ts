@@ -28,10 +28,12 @@ export {
 
 export {
   buildCampaignTotalsSubmissions,
+  buildWorld2TotalsSubmissions,
   buildDuelSubmissions,
   buildSprintSubmissions,
   isKnownLeaderboardId,
   type CampaignTotalsInput,
+  type World2TotalsInput,
   type DuelResultInput,
   type SprintResultInput,
 } from './gameCenterMappers';

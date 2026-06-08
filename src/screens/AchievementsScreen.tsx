@@ -137,6 +137,7 @@ function getProgressFor(
 function groupByCategory(): Record<AchievementCategory, GameCenterAchievementId[]> {
   const groups: Record<AchievementCategory, GameCenterAchievementId[]> = {
     campaign: [],
+    nexus: [],
     sprint: [],
     duels: [],
     social: [],

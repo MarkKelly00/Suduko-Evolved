@@ -17,7 +17,7 @@ export type Grid = CellValue[][];
  */
 export type CandidateMap = number[][][];
 
-export type Difficulty = 'tutorial' | 'easy' | 'medium' | 'hard';
+export type Difficulty = 'tutorial' | 'easy' | 'medium' | 'hard' | 'expert';
 
 export interface Puzzle {
   /** Stable string seed; same seed → identical puzzle every time. */

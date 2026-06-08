@@ -60,6 +60,31 @@ export function buildCampaignTotalsSubmissions(
   ];
 }
 
+export interface World2TotalsInput {
+  /** Sum of all level stars across World 2 / Astral Nexus (cap: 90). */
+  totalStars: number;
+  /** Count of crowned levels across World 2 (cap: 30). */
+  totalCrowns: number;
+}
+
+/** Astral Nexus stars + crowns leaderboard submissions. These flow through
+ *  the same guarded `submitScores` path; until the operator registers the two
+ *  ids in App Store Connect they are skipped (no submit, no enqueue). */
+export function buildWorld2TotalsSubmissions(
+  input: World2TotalsInput,
+): LeaderboardSubmission[] {
+  return [
+    {
+      leaderboardId: GAME_CENTER_LEADERBOARDS.ASTRAL_NEXUS_STARS,
+      value: clampNonNegativeInt(input.totalStars),
+    },
+    {
+      leaderboardId: GAME_CENTER_LEADERBOARDS.ASTRAL_NEXUS_CROWNS,
+      value: clampNonNegativeInt(input.totalCrowns),
+    },
+  ];
+}
+
 export interface SprintResultInput {
   score: number;
   /** Elapsed time in seconds. Submitted only when `cleared` is true. */

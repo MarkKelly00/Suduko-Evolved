@@ -52,9 +52,20 @@ const TIERS = {
 
 const TILE_BG = '#121A2A'; // matches colors.surface in the app
 
+// World 2 (Astral Nexus) cosmic palette. Distinct from the botanical tier
+// colors but sharing the warm gold accent so the two icon sets feel related.
+const NEXUS = {
+  primary: '#8A6BF2', // violet base
+  shadow: '#3C2E7A',
+  highlight: '#C4B5FF', // starlight
+  gold: '#E0B96A',
+  cyan: '#5EE7C4',
+  haloHex: '#9D7BFF',
+};
+
 function shared(tier) {
   const t = TIERS[tier];
-  return `Generate a single 1024x1024 square image for a premium iOS Sudoku puzzle app called "Sudoku Evolved" with a meditative botanical "Logic Garden" theme. This is one achievement icon in a set of 20.
+  return `Generate a single 1024x1024 square image for a premium iOS Sudoku puzzle app called "Sudoku Evolved" with a meditative botanical "Logic Garden" theme. This is one achievement icon in a set of 23.
 
 BACKGROUND: a perfectly flat solid dark navy color ${TILE_BG} filling the ENTIRE canvas edge-to-edge. The whole image is one uniform navy plate. NO rounded corners. NO border. NO frame. NO inner shadow. NO tile chrome of any kind. NO sudoku-grid corner marks. NO watermarks.
 
@@ -75,6 +86,41 @@ HARD CONSTRAINTS:
 - The glyph must have a strong silhouette — recognizable from outline alone at 64x64 px after downscaling.
 
 REFERENCE AESTHETIC: Apple Watch fitness rings × Studio Ghibli botanical illustration × Headspace meditation app icons. Premium, dark-elegant, meditative, mathematical beauty.
+
+CENTRAL GLYPH (this is what the icon represents):
+`;
+}
+
+/**
+ * Cosmic chrome for the World 2 (Astral Nexus) icons. Identical plate /
+ * positioning / glyph-style / silhouette rules as `shared` (so the set reads
+ * cohesively with the 20 Logic Garden icons), but the theme + palette are
+ * cosmic: violet base, starlight highlights, gold/cyan accents over the same
+ * navy plate, with a violet halo. Stays within the same hard constraints
+ * (no cyberpunk, no circuit boards, no occult symbols).
+ */
+function sharedNexus(tier) {
+  const haloOpacity = TIERS[tier]?.haloOpacity ?? 22;
+  return `Generate a single 1024x1024 square image for a premium iOS Sudoku puzzle app called "Sudoku Evolved". This icon belongs to "World 2 — Astral Nexus", a cosmic-logic theme (constellations, prism light, sacred geometry, star paths). This is one achievement icon in a set of 23.
+
+BACKGROUND: a perfectly flat solid dark cosmic navy color ${TILE_BG} filling the ENTIRE canvas edge-to-edge. One uniform navy plate. NO rounded corners. NO border. NO frame. NO inner shadow. NO tile chrome of any kind. NO sudoku-grid corner marks. NO watermarks.
+
+HALO: a soft radial halo in ${NEXUS.haloHex} (violet) at ${haloOpacity}% opacity, centered behind the glyph, extending to ~70% of canvas width, fading smoothly to the navy background. Atmospheric, never harsh. A faint secondary cyan (${NEXUS.cyan}) glow may sit at the very center.
+
+POSITIONING (CRITICAL — ENFORCE THIS): the central glyph occupies EXACTLY 60-65% of the canvas. PERFECTLY CENTERED both horizontally and vertically. EQUAL margins of approximately 17-20% on all four sides. The geometric center of the glyph MUST sit at the geometric center of the canvas.
+
+GLYPH STYLE: luminous painted illustration. Soft specular highlights, gentle ambient shadow, smooth color gradients, a subtle inner glow. NO hard outlines — definition comes from light and shadow. NOT brushed metal, NOT 3D render, NOT cartoon, NOT cyberpunk.
+
+GLYPH COLOR: violet ${NEXUS.primary} as the base, ${NEXUS.shadow} as the shadow, starlight ${NEXUS.highlight} as the highlight, with warm gold ${NEXUS.gold} and cyan ${NEXUS.cyan} as small accent details only. Cosmic, prismatic, premium.
+
+HARD CONSTRAINTS:
+- NO text or captions anywhere (the ONLY allowed text is short numerals explicitly listed in the glyph spec below).
+- NO scenery, no characters outside the glyph itself.
+- NO fantasy-RPG iconography, no occult symbols, no rune circles, no zodiac signs, no astrology charts.
+- NO cyberpunk, no circuit boards, no holograms, no industrial machinery.
+- The glyph must have a strong silhouette — recognizable from outline alone at 64x64 px after downscaling.
+
+REFERENCE AESTHETIC: Apple Watch fitness rings × celestial sacred-geometry line art × Headspace meditation app icons. Premium, dark-elegant, cosmic, mathematical beauty.
 
 CENTRAL GLYPH (this is what the icon represents):
 `;
@@ -180,12 +226,32 @@ const TILES = {
     tier: 'bronze',
     glyph: `A single curved lanceolate leaf (willow-leaf shape, slim and pointed at both ends) floating diagonally across the center of the canvas. Behind the leaf, a soft pause-symbol — two short vertical bars side by side. A subtle radial calm-halo emanates from the pause symbol. Meditative, zen. Symbolizes pausing and returning to finish a level.`,
   },
+
+  // ── World 2 — Astral Nexus (cosmic theme; use sharedNexus chrome) ──
+  astral_nexus_unlocked: {
+    tier: 'bronze',
+    theme: 'nexus',
+    glyph: `A luminous portal gateway: two slender curved pillars forming an upright archway, with a soft violet-to-cyan radial glow filling the opening between them. A single bright five-point star sits centered in the mouth of the portal. The arch is the only subject, perfectly centered, with thin concentric ring-echoes radiating from the star. Symbolizes crossing the threshold into the Astral Nexus.`,
+  },
+
+  astral_nexus_complete: {
+    tier: 'gold',
+    theme: 'nexus',
+    glyph: `A constellation lattice: exactly NINE small glowing nodes connected by thin luminous lines into a balanced 3x3 star-map (echoing a sudoku grid as a constellation). Violet nodes joined by fine cyan threads. A subtle gold ring frames the whole constellation. Symmetric, calm, complete. Symbolizes clearing all 30 Astral Nexus levels.`,
+  },
+
+  astral_core_perfect: {
+    tier: 'gold',
+    theme: 'nexus',
+    glyph: `A radiant central core orb glowing violet-gold at the exact center of the canvas, emitting a soft bloom of cyan-gold light. A single thin orbital ring circles the core, tilted in gentle perspective (an ellipse). A small simple three-point crown floats just above the core. Apex, climactic, sacred. Symbolizes crowning the Astral Core — the final level.`,
+  },
 };
 
 export function getPrompt(id) {
   const tile = TILES[id];
   if (!tile) throw new Error(`No prompt defined for "${id}"`);
-  return shared(tile.tier) + tile.glyph;
+  const chrome = tile.theme === 'nexus' ? sharedNexus(tile.tier) : shared(tile.tier);
+  return chrome + tile.glyph;
 }
 
 export function listIds() {

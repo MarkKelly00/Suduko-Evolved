@@ -49,7 +49,9 @@ export type AchievementEvent =
   | FriendChallengedEvent
   | MultiRegionCompletionEvent
   | NoHintClearEvent
-  | PausedAndCompletedEvent;
+  | PausedAndCompletedEvent
+  | World2ProgressUpdatedEvent
+  | AstralCorePerfectEvent;
 
 interface CampaignLevelCompletedEvent {
   kind: 'campaignLevelCompleted';
@@ -107,6 +109,16 @@ interface NoHintClearEvent {
 }
 interface PausedAndCompletedEvent {
   kind: 'pausedAndCompleted';
+}
+interface World2ProgressUpdatedEvent {
+  kind: 'world2ProgressUpdated';
+  /** Whether Astral Nexus is unlocked (Logic Garden level 30 cleared). */
+  unlocked: boolean;
+  /** 0..30 World 2 levels cleared. */
+  clearedCount: number;
+}
+interface AstralCorePerfectEvent {
+  kind: 'astralCorePerfect';
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -217,6 +229,21 @@ export function evaluate(event: AchievementEvent): AchievementSubmission[] {
 
     case 'pausedAndCompleted':
       return [{ achievementId: A.TAKE_A_BREATH, percentComplete: 100 }];
+
+    case 'world2ProgressUpdated':
+      return [
+        {
+          achievementId: A.ASTRAL_NEXUS_UNLOCKED,
+          percentComplete: event.unlocked ? 100 : 0,
+        },
+        {
+          achievementId: A.ASTRAL_NEXUS_COMPLETE,
+          percentComplete: pct(event.clearedCount, 30),
+        },
+      ];
+
+    case 'astralCorePerfect':
+      return [{ achievementId: A.ASTRAL_CORE_PERFECT, percentComplete: 100 }];
   }
 }
 

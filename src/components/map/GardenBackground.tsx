@@ -113,6 +113,11 @@ function tintForBiome(biome: MapNodeLayout['biome']): string {
       return 'rgba(245, 213, 138, 0.24)';
     case 'oracle-grove':
       return 'rgba(123, 167, 242, 0.24)';
+    default:
+      // World 2 biomes never reach here (GardenBackground only renders the
+      // World 1 layout) — a calm default keeps the switch total after the
+      // shared MapBiome union was widened for Astral Nexus.
+      return 'rgba(123, 167, 242, 0.24)';
   }
 }
 

@@ -55,7 +55,9 @@ describe('getAchievementTier()', () => {
     expect(getAchievementTier(id)).toBe(expectedTier);
   });
 
-  it('partitions the 20 IDs into 4 / 7 / 7 / 2 by tier', () => {
+  it('partitions the 23 IDs into 5 / 7 / 9 / 2 by tier', () => {
+    // 20 World 1 + 3 Astral Nexus (Unlocked 20 → bronze, Complete 40 → gold,
+    // Core Perfect 50 → gold).
     const counts: Record<AchievementTier, number> = {
       bronze: 0,
       silver: 0,
@@ -65,7 +67,7 @@ describe('getAchievementTier()', () => {
     for (const id of ALL_ACHIEVEMENT_IDS) {
       counts[getAchievementTier(id)] += 1;
     }
-    expect(counts).toEqual({ bronze: 4, silver: 7, gold: 7, obsidian: 2 });
+    expect(counts).toEqual({ bronze: 5, silver: 7, gold: 9, obsidian: 2 });
   });
 });
 

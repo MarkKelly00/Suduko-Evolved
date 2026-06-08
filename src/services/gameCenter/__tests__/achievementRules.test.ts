@@ -19,20 +19,20 @@ import {
 } from '../../../game/achievements/achievementRules';
 
 describe('achievement IDs + points', () => {
-  it('declares exactly 20 achievement IDs', () => {
-    expect(ALL_ACHIEVEMENT_IDS.length).toBe(20);
+  it('declares exactly 23 achievement IDs', () => {
+    // 20 World 1 + 3 World 2 (Astral Nexus).
+    expect(ALL_ACHIEVEMENT_IDS.length).toBe(23);
   });
 
-  it('sums to 800 points across all achievements', () => {
-    // 800 derives from the per-achievement point values in the spec
-    // (10, 20, 25, 25, 50, 75, 25, 50, 100, 50, 100, 25, 50, 10, 25,
-    // 50, 25, 50, 25, 10). Apple's per-app cap is 1000; 800 leaves
-    // headroom for v2 achievements.
+  it('sums to 910 points across all achievements', () => {
+    // World 1's 800 (10, 20, 25, 25, 50, 75, 25, 50, 100, 50, 100, 25, 50,
+    // 10, 25, 50, 25, 50, 25, 10) + Astral Nexus's 110 (20 + 40 + 50) = 910.
+    // Apple's per-app cap is 1000; 910 leaves 90 of headroom for World 3.
     const sum = Object.values(ACHIEVEMENT_POINTS).reduce(
       (a, b) => a + b,
       0,
     );
-    expect(sum).toBe(800);
+    expect(sum).toBe(910);
   });
 
   it('has a point value for every declared ID', () => {
@@ -168,6 +168,37 @@ describe('evaluate() — count-based achievements', () => {
       oracleBloomCleared: 10,
     });
     for (const s of out) expect(s.percentComplete).toBe(100);
+  });
+
+  it('world2ProgressUpdated maps unlock + completion percent', () => {
+    const out = evaluate({
+      kind: 'world2ProgressUpdated',
+      unlocked: true,
+      clearedCount: 15,
+    });
+    const map = new Map(out.map((s) => [s.achievementId, s.percentComplete]));
+    expect(map.get(GAME_CENTER_ACHIEVEMENTS.ASTRAL_NEXUS_UNLOCKED)).toBe(100);
+    expect(map.get(GAME_CENTER_ACHIEVEMENTS.ASTRAL_NEXUS_COMPLETE)).toBe(50);
+  });
+
+  it('world2ProgressUpdated keeps unlocked at 0 before the gate', () => {
+    const out = evaluate({
+      kind: 'world2ProgressUpdated',
+      unlocked: false,
+      clearedCount: 0,
+    });
+    const map = new Map(out.map((s) => [s.achievementId, s.percentComplete]));
+    expect(map.get(GAME_CENTER_ACHIEVEMENTS.ASTRAL_NEXUS_UNLOCKED)).toBe(0);
+    expect(map.get(GAME_CENTER_ACHIEVEMENTS.ASTRAL_NEXUS_COMPLETE)).toBe(0);
+  });
+
+  it('astralCorePerfect → ASTRAL_CORE_PERFECT at 100%', () => {
+    expect(evaluate({ kind: 'astralCorePerfect' })).toEqual([
+      {
+        achievementId: GAME_CENTER_ACHIEVEMENTS.ASTRAL_CORE_PERFECT,
+        percentComplete: 100,
+      },
+    ]);
   });
 });
 

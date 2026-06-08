@@ -36,6 +36,15 @@ export const GAME_CENTER_LEADERBOARDS = {
   /** World 1 total crowns. Max 30 (1 per level). Sort: high → low. */
   LOGIC_GARDEN_CROWNS:
     'com.sudokuevolved.leaderboard.logic_garden_crowns',
+  /** World 2 (Astral Nexus) total stars. Max 90 (3★ × 30 levels).
+   *  Sort: high → low. NOT yet created in App Store Connect — kept out of
+   *  `REGISTERED_LEADERBOARD_IDS` so no submission is sent until it exists. */
+  ASTRAL_NEXUS_STARS:
+    'com.sudokuevolved.leaderboard.astral_nexus_stars',
+  /** World 2 (Astral Nexus) total crowns. Max 30. Sort: high → low.
+   *  NOT yet created in App Store Connect (see note above). */
+  ASTRAL_NEXUS_CROWNS:
+    'com.sudokuevolved.leaderboard.astral_nexus_crowns',
 } as const;
 
 export type GameCenterLeaderboardId =
@@ -114,6 +123,17 @@ export const GAME_CENTER_ACHIEVEMENTS = {
   /** Pause/resume and complete a level. 10 pts. */
   TAKE_A_BREATH:
     'com.sudokuevolved.achievement.take_a_breath',
+
+  // ── World 2 — Astral Nexus ──
+  /** Cross the threshold into the Astral Nexus (reach World 2). 20 pts. */
+  ASTRAL_NEXUS_UNLOCKED:
+    'com.sudokuevolved.achievement.astral_nexus_unlocked',
+  /** Clear all 30 Astral Nexus levels (31–60). 40 pts. */
+  ASTRAL_NEXUS_COMPLETE:
+    'com.sudokuevolved.achievement.astral_nexus_complete',
+  /** Crown the Astral Core — the final level (60). 50 pts. */
+  ASTRAL_CORE_PERFECT:
+    'com.sudokuevolved.achievement.astral_core_perfect',
 } as const;
 
 export type GameCenterAchievementId =
@@ -124,7 +144,9 @@ export const ALL_ACHIEVEMENT_IDS: readonly GameCenterAchievementId[] =
 
 /**
  * Point values per achievement. Exported separately so tests can verify
- * the App Store Connect total matches the spec — sum must be 910.
+ * the App Store Connect total matches the spec — sum must be 910 (World 1's
+ * 800 + Astral Nexus's 110). Apple caps an app at 1000 total points, so this
+ * leaves 90 of headroom for future worlds.
  */
 export const ACHIEVEMENT_POINTS: Readonly<
   Record<GameCenterAchievementId, number>
@@ -149,4 +171,68 @@ export const ACHIEVEMENT_POINTS: Readonly<
   [GAME_CENTER_ACHIEVEMENTS.PERFECT_HARMONY]: 50,
   [GAME_CENTER_ACHIEVEMENTS.NO_HINTS_NEEDED]: 25,
   [GAME_CENTER_ACHIEVEMENTS.TAKE_A_BREATH]: 10,
+  // World 2 — Astral Nexus (110 total).
+  [GAME_CENTER_ACHIEVEMENTS.ASTRAL_NEXUS_UNLOCKED]: 20,
+  [GAME_CENTER_ACHIEVEMENTS.ASTRAL_NEXUS_COMPLETE]: 40,
+  [GAME_CENTER_ACHIEVEMENTS.ASTRAL_CORE_PERFECT]: 50,
 };
+
+/**
+ * IDs that have actually been created in App Store Connect and are therefore
+ * safe to submit to. The Game Center service short-circuits (no submit, no
+ * enqueue) for any id NOT in these sets — so World 2 leaderboard/achievement
+ * reporting is fully wired in code but stays inert until the operator creates
+ * the IDs in ASC and adds them here. (See `docs/GAME_CENTER_SETUP.md`.)
+ *
+ * To go live with Astral Nexus Game Center: create the 2 leaderboards + 3
+ * achievements in ASC with the exact ids above, then move them from the
+ * "pending" comments below into these sets.
+ */
+export const REGISTERED_LEADERBOARD_IDS: ReadonlySet<string> = new Set<string>([
+  GAME_CENTER_LEADERBOARDS.SPRINT_3MIN_SCORE,
+  GAME_CENTER_LEADERBOARDS.SPRINT_FASTEST_CLEAR,
+  GAME_CENTER_LEADERBOARDS.DUEL_WINS,
+  GAME_CENTER_LEADERBOARDS.DUEL_BEST_SCORE,
+  GAME_CENTER_LEADERBOARDS.LOGIC_GARDEN_STARS,
+  GAME_CENTER_LEADERBOARDS.LOGIC_GARDEN_CROWNS,
+  // Pending ASC creation:
+  // GAME_CENTER_LEADERBOARDS.ASTRAL_NEXUS_STARS,
+  // GAME_CENTER_LEADERBOARDS.ASTRAL_NEXUS_CROWNS,
+]);
+
+export const REGISTERED_ACHIEVEMENT_IDS: ReadonlySet<string> = new Set<string>([
+  GAME_CENTER_ACHIEVEMENTS.FIRST_BLOOM,
+  GAME_CENTER_ACHIEVEMENTS.PERFECT_BLOOM,
+  GAME_CENTER_ACHIEVEMENTS.SEED_GROVE_COMPLETE,
+  GAME_CENTER_ACHIEVEMENTS.MOONVINE_STREAM_COMPLETE,
+  GAME_CENTER_ACHIEVEMENTS.ORACLE_BLOOM_COMPLETE,
+  GAME_CENTER_ACHIEVEMENTS.LOGIC_GARDEN_COMPLETE,
+  GAME_CENTER_ACHIEVEMENTS.STAR_COLLECTOR,
+  GAME_CENTER_ACHIEVEMENTS.STAR_HARMONY,
+  GAME_CENTER_ACHIEVEMENTS.PERFECT_CONSTELLATION,
+  GAME_CENTER_ACHIEVEMENTS.CROWNED_LOGIC,
+  GAME_CENTER_ACHIEVEMENTS.CROWN_GARDEN,
+  GAME_CENTER_ACHIEVEMENTS.LIGHTNING_SOLVE,
+  GAME_CENTER_ACHIEVEMENTS.PERFECT_SPRINT,
+  GAME_CENTER_ACHIEVEMENTS.FIRST_DUEL,
+  GAME_CENTER_ACHIEVEMENTS.LOGIC_RIVAL,
+  GAME_CENTER_ACHIEVEMENTS.PERFECT_RIVALRY,
+  GAME_CENTER_ACHIEVEMENTS.FRIENDLY_CHALLENGE,
+  GAME_CENTER_ACHIEVEMENTS.PERFECT_HARMONY,
+  GAME_CENTER_ACHIEVEMENTS.NO_HINTS_NEEDED,
+  GAME_CENTER_ACHIEVEMENTS.TAKE_A_BREATH,
+  // Pending ASC creation:
+  // GAME_CENTER_ACHIEVEMENTS.ASTRAL_NEXUS_UNLOCKED,
+  // GAME_CENTER_ACHIEVEMENTS.ASTRAL_NEXUS_COMPLETE,
+  // GAME_CENTER_ACHIEVEMENTS.ASTRAL_CORE_PERFECT,
+]);
+
+/** True iff the leaderboard id has been created in App Store Connect. */
+export function isLeaderboardRegistered(id: string): boolean {
+  return REGISTERED_LEADERBOARD_IDS.has(id);
+}
+
+/** True iff the achievement id has been created in App Store Connect. */
+export function isAchievementRegistered(id: string): boolean {
+  return REGISTERED_ACHIEVEMENT_IDS.has(id);
+}

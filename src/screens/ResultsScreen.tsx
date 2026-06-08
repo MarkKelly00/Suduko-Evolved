@@ -16,7 +16,9 @@ import { useProgressStore } from '@/game/state/useProgressStore';
 import { useAuthGate } from '@/components/auth/AuthGate';
 import {
   deriveCampaignTotals,
+  deriveWorld2Totals,
   submitCampaignResult,
+  submitWorld2Result,
   submitSprintResult,
 } from '@/game/leaderboards/leaderboardSubmissions';
 import {
@@ -79,6 +81,17 @@ function ResultsScreen() {
         cleared: sprintCleared === true,
         mistakes,
         hintsUsed,
+      });
+    } else if (level && level.worldId === 'world2') {
+      // Astral Nexus completion → World 2 leaderboards + achievements.
+      const w2 = deriveWorld2Totals(progress.levels);
+      void submitWorld2Result({
+        level: level.index,
+        isCrown: crown === true,
+        hintsUsed,
+        totalStars: w2.totalStars,
+        totalCrowns: w2.totalCrowns,
+        clearedCount: w2.clearedCount,
       });
     } else if (level) {
       const totals = deriveCampaignTotals(progress.levels);

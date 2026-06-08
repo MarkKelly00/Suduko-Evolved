@@ -4,7 +4,7 @@
  * without losing player data.
  */
 
-export const SCHEMA_VERSION = 1 as const;
+export const SCHEMA_VERSION = 2 as const;
 
 export const STORAGE_KEYS = {
   progress: 'progress',
@@ -38,55 +38,87 @@ export interface TimeTrialBest {
   date: number;
 }
 
-export interface ProgressStoreV1 {
-  version: 1;
+export interface ProgressStoreV2 {
+  version: 2;
   levels: Record<string, ProgressLevelEntry>;
   totalXP: number;
   currentStreak: number;
   lastPlayedLevel: string | null;
   unlockedLevels: string[];
+  /** Worlds the player has opened. `world1` is always present; `world2`
+   *  (Astral Nexus) is added once Logic Garden's level 30 is completed. This
+   *  is DERIVED from `completedLevelIds` and repaired by the progress store on
+   *  every hydrate / record / cloud-restore via `repairUnlockedWorlds`, so it
+   *  can never desync — it's persisted only so reads are cheap and offline-safe.
+   *  New in schema v2; older saves get `['world1']` here via `migrateProgress`
+   *  and are then repaired on first hydrate. */
+  unlockedWorlds: string[];
   timeTrialBests: Record<string, TimeTrialBest>;
   completedLevelIds: string[];
   /** True once the player has Begun OR Skipped the one-time first-launch
-   *  tutorial modal. Persists forever after. New field; existing v1 saves
-   *  without this key get the default `false` via `migrateProgress` and will
-   *  see the modal once on next launch. */
+   *  tutorial modal. Persists forever after. */
   hasSeenTutorial: boolean;
 }
 
-export function defaultProgress(): ProgressStoreV1 {
+/** Back-compat alias — the live persisted shape. */
+export type ProgressStore = ProgressStoreV2;
+
+export function defaultProgress(): ProgressStoreV2 {
   return {
-    version: 1,
+    version: 2,
     levels: {},
     totalXP: 0,
     currentStreak: 0,
     lastPlayedLevel: null,
     unlockedLevels: ['world1-level-1'],
+    unlockedWorlds: ['world1'],
     timeTrialBests: {},
     completedLevelIds: [],
     hasSeenTutorial: false,
   };
 }
 
-export function migrateProgress(raw: unknown): ProgressStoreV1 {
+/**
+ * Migrate a raw persisted blob up to the current schema (v2).
+ *
+ * NON-DESTRUCTIVE: existing levels, stars, crowns, unlocked levels, XP, streak,
+ * and the current level are always preserved. New fields are filled from
+ * defaults. The `unlockedWorlds` array is added with a safe `['world1']` default
+ * and then re-derived/repaired from `completedLevelIds` by the progress store on
+ * hydrate, so a returning player who had cleared World 1 sees World 2 unlock
+ * automatically without a destructive reset.
+ */
+export function migrateProgress(raw: unknown): ProgressStoreV2 {
   if (raw == null || typeof raw !== 'object') return defaultProgress();
   const r = raw as { version?: number; [k: string]: unknown };
   const version = r.version;
-  if (version === 1) {
-    // Already current. Fill any missing fields from defaults so reads of
-    // newly-introduced (but compatible) fields don't return undefined.
-    return { ...defaultProgress(), ...(raw as Partial<ProgressStoreV1>) };
+  const base = defaultProgress();
+
+  if (version === 2) {
+    // Already current. Fill any missing fields from defaults.
+    return { ...base, ...(raw as Partial<ProgressStoreV2>) };
   }
-  if (version === undefined || version === 0) {
-    // v0 → v1: legacy shape didn't carry `version`/`completedLevelIds`.
-    // Wrap and forward whatever fields we can.
-    const base = defaultProgress();
-    const partial = raw as Partial<ProgressStoreV1>;
+  if (version === 1) {
+    // v1 → v2: identical shape plus `unlockedWorlds`. Preserve everything;
+    // seed `unlockedWorlds` with the safe default (store repairs from
+    // completedLevelIds on hydrate).
+    const partial = raw as Partial<ProgressStoreV2>;
     return {
       ...base,
       ...partial,
-      version: 1,
+      version: 2,
+      unlockedWorlds: partial.unlockedWorlds ?? ['world1'],
+    };
+  }
+  if (version === undefined || version === 0) {
+    // v0 → v2: legacy shape didn't carry `version`/`completedLevelIds`.
+    const partial = raw as Partial<ProgressStoreV2>;
+    return {
+      ...base,
+      ...partial,
+      version: 2,
       completedLevelIds: partial.completedLevelIds ?? [],
+      unlockedWorlds: partial.unlockedWorlds ?? ['world1'],
     };
   }
   // Unknown future version — fall back to defaults rather than crash.

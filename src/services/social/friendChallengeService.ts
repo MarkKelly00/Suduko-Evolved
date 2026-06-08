@@ -12,7 +12,7 @@ export interface FriendChallenge {
   /** Puzzle is fully reproducible from these. */
   levelId: string;
   seed: string;
-  difficulty: 'tutorial' | 'easy' | 'medium' | 'hard';
+  difficulty: 'tutorial' | 'easy' | 'medium' | 'hard' | 'expert';
   /** Sender's score the receiver is challenged to beat. */
   challengerScore: number;
   challengerTime: number;
