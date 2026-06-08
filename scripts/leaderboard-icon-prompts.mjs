@@ -47,6 +47,40 @@ const TIERS = {
 
 const TILE_BG = '#121A2A';
 
+// World 2 (Astral Nexus) cosmic palette — matches the Astral Nexus achievement
+// icons so the Game Center set reads cohesively.
+const NEXUS = {
+  primary: '#8A6BF2',
+  shadow: '#3C2E7A',
+  highlight: '#C4B5FF',
+  gold: '#E0B96A',
+  cyan: '#5EE7C4',
+  haloHex: '#9D7BFF',
+};
+
+/** Cosmic chrome for World 2 leaderboard icons (violet/cyan/gold on the same
+ *  navy plate, circular-crop safe). Mirrors the achievement `sharedNexus`. */
+function sharedNexus() {
+  return `Generate a single 1024x1024 square image for a premium iOS Sudoku puzzle app called "Sudoku Evolved". This is a Game Center LEADERBOARD icon for "World 2 — Astral Nexus" (cosmic-logic theme), visually cohesive with the Astral Nexus achievement icons.
+
+BACKGROUND: a perfectly flat solid dark cosmic navy ${TILE_BG} filling the ENTIRE canvas edge-to-edge. One uniform navy plate. NO rounded corners, NO border, NO frame, NO inner shadow, NO grid, NO watermark.
+
+HALO: a soft radial halo in ${NEXUS.haloHex} (violet) at ~24% opacity, centered behind the glyph, extending to ~70% of canvas width, fading smoothly to the navy.
+
+POSITIONING (CRITICAL): the central glyph occupies EXACTLY 60-65% of the canvas, PERFECTLY CENTERED both horizontally and vertically, with EQUAL ~17-20% margins on all four sides. The icon is shown in a CIRCULAR CROP by Game Center, so the glyph must read cleanly when corners are clipped.
+
+GLYPH STYLE: luminous painted illustration with soft specular highlights, gentle ambient shadow, smooth gradients, subtle inner glow. NO hard outlines. NOT brushed metal, NOT 3D render, NOT cartoon, NOT cyberpunk.
+
+GLYPH COLOR: violet ${NEXUS.primary} base, ${NEXUS.shadow} shadow, starlight ${NEXUS.highlight} highlight, with warm gold ${NEXUS.gold} and cyan ${NEXUS.cyan} as small accent details.
+
+HARD CONSTRAINTS: NO text, NO numerals, NO captions, NO logo, NO UI, NO occult symbols, NO cyberpunk/circuit boards. Strong silhouette, recognizable at 64px.
+
+REFERENCE AESTHETIC: Apple Watch fitness rings × celestial sacred-geometry line art × Headspace meditation app icons. Premium, dark-elegant, cosmic.
+
+CENTRAL GLYPH (this is what the leaderboard represents):
+`;
+}
+
 function shared(tier) {
   const t = TIERS[tier];
   return `Generate a single 1024x1024 square image for a premium iOS Sudoku puzzle app called "Sudoku Evolved" with a meditative botanical "Logic Garden" theme. This is one Game Center LEADERBOARD icon — visually cohesive with the same app's achievement icon set (botanical, painted, dark navy with tier-colored glow).
@@ -105,12 +139,24 @@ const LEADERBOARDS = {
     tier: 'gold',
     glyph: `A single ornate three-point crown viewed straight-on, filigreed and detailed, floating above a horizontal row of THREE small five-petal blooms (the blooms form a slim botanical band beneath the crown, suggesting accumulated crowns earned across the garden). The crown is the focal element; the blooms are smaller decorative supporting elements. Symbolizes total campaign crowns earned.`,
   },
+
+  // ── World 2 — Astral Nexus (cosmic theme; use sharedNexus chrome) ──
+  astral_nexus_stars: {
+    theme: 'nexus',
+    glyph: `A radiant cluster of glowing five-point stars forming a balanced constellation — one larger bright star at the center with several smaller stars arranged around it, joined by faint thin connecting lines. Violet and starlight-cyan stars with warm gold cores. Symbolizes total stars earned across the Astral Nexus.`,
+  },
+
+  astral_nexus_crowns: {
+    theme: 'nexus',
+    glyph: `A single glowing ornate three-point crown viewed straight-on, with fine filigree and a bright central gem, a soft cosmic sparkle of tiny stars around it. Warm gold crown with violet glow and cyan highlights. Symbolizes crowns earned across the Astral Nexus.`,
+  },
 };
 
 export function getPrompt(id) {
   const lb = LEADERBOARDS[id];
   if (!lb) throw new Error(`No prompt defined for "${id}"`);
-  return shared(lb.tier) + lb.glyph;
+  const chrome = lb.theme === 'nexus' ? sharedNexus() : shared(lb.tier);
+  return chrome + lb.glyph;
 }
 
 export function listIds() {
