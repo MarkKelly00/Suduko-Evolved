@@ -14,7 +14,8 @@ import type { LeaderboardRow as Row } from '@/lib/supabase/types';
 type TabKey = 'global' | 'sprint' | 'duels' | 'friends';
 
 interface LeaderboardTabsProps {
-  /** Leaderboards for every Logic Garden level (1..30) keyed by id. */
+  /** Leaderboards for every campaign level (1..60 across both worlds) keyed
+   *  by level id. */
   globalsByLevel: Record<CampaignLevelId, Row[]>;
   sprint: Row[];
   configured: boolean;
@@ -28,25 +29,56 @@ const TABS: { key: TabKey; label: string }[] = [
 ];
 
 /**
- * Biome groupings for the Global level pills. Mirrors the iOS app's
- * ACT structure (see src/components/map/mapLayout.ts WORLD_1_ACTS) so
- * the website's leaderboard sub-selector reads the same as the
- * in-game biome treatment. Each biome covers a contiguous 10-level
- * range, capped at the world's 30 levels.
+ * Worlds → acts (the "biome" tier). Mirrors the iOS Saga Atlas:
+ * Logic Garden (levels 1–30) and Astral Nexus (31–60). Each act covers a
+ * contiguous 10-level range; the top-level World selector keeps the act/level
+ * rows uncluttered (3 acts / 10 levels per world) and scales to future worlds.
  */
-const BIOMES = [
-  { id: 'seed-grove', label: 'Seed Grove', from: 1, to: 10 },
-  { id: 'moonvine-stream', label: 'Moonvine Stream', from: 11, to: 20 },
-  { id: 'oracle-bloom', label: 'Oracle Bloom', from: 21, to: 30 },
+const WORLDS = [
+  {
+    id: 'world1',
+    label: 'Logic Garden',
+    accent: 'gold' as const,
+    biomes: [
+      { id: 'seed-grove', label: 'Seed Grove', from: 1, to: 10 },
+      { id: 'moonvine-stream', label: 'Moonvine Stream', from: 11, to: 20 },
+      { id: 'oracle-bloom', label: 'Oracle Bloom', from: 21, to: 30 },
+    ],
+  },
+  {
+    id: 'world2',
+    label: 'Astral Nexus',
+    accent: 'violet' as const,
+    biomes: [
+      { id: 'prism-causeway', label: 'Prism Causeway', from: 31, to: 40 },
+      { id: 'starfall-archive', label: 'Starfall Archive', from: 41, to: 50 },
+      { id: 'celestial-engine', label: 'Celestial Engine', from: 51, to: 60 },
+    ],
+  },
 ] as const;
-type BiomeId = (typeof BIOMES)[number]['id'];
+type WorldId = (typeof WORLDS)[number]['id'];
+type BiomeId = (typeof WORLDS)[number]['biomes'][number]['id'];
 
-/** All 30 level pills, derived once from CAMPAIGN_LEVEL_IDS. */
+const ALL_BIOMES = WORLDS.flatMap((w) =>
+  w.biomes.map((b) => ({ ...b, worldId: w.id, worldLabel: w.label })),
+);
+
+/** All level pills (1–60), derived once from CAMPAIGN_LEVEL_IDS. `index` is the
+ *  global level number; the label strips the `worldN-level-` prefix → "L31". */
 const LEVEL_PILLS = CAMPAIGN_LEVEL_IDS.map((id, i) => ({
   id,
-  label: id.replace('world1-level-', 'L'),
+  label: `L${id.split('-').pop()}`,
   index: i + 1,
 }));
+
+/** Active-chip classes for the World tier — gold for Logic Garden, a hint of
+ *  violet for Astral Nexus (its cosmic accent), without disturbing the
+ *  gold/navy brand of the act + level chips below. */
+function worldActiveClass(accent: 'gold' | 'violet'): string {
+  return accent === 'violet'
+    ? 'bg-[rgba(157,123,255,0.18)] text-[#C4B5FF] ring-1 ring-[rgba(157,123,255,0.5)]'
+    : 'bg-[rgba(224,185,106,0.18)] text-[var(--color-gold-glow)] ring-1 ring-[rgba(224,185,106,0.5)]';
+}
 
 export function LeaderboardTabs({
   globalsByLevel,
@@ -54,17 +86,22 @@ export function LeaderboardTabs({
   configured,
 }: LeaderboardTabsProps) {
   const [active, setActive] = useState<TabKey>('global');
+  const [activeWorld, setActiveWorld] = useState<WorldId>('world1');
   const [activeBiome, setActiveBiome] = useState<BiomeId>('seed-grove');
   const [activeLevel, setActiveLevel] = useState<CampaignLevelId>(
     'world1-level-1',
   );
 
+  const activeWorldMeta = useMemo(
+    () => WORLDS.find((w) => w.id === activeWorld) ?? WORLDS[0],
+    [activeWorld],
+  );
+
   // Resolve the active biome's pill subset + its display label so the
-  // 30 levels visually condense to 10 at a time without losing the
-  // "scan everything" affordance — clicking the biome row is a single
-  // hop between segments.
+  // levels visually condense to 10 at a time without losing the
+  // "scan everything" affordance — clicking the biome row is a single hop.
   const activeBiomeMeta = useMemo(
-    () => BIOMES.find((b) => b.id === activeBiome) ?? BIOMES[0],
+    () => ALL_BIOMES.find((b) => b.id === activeBiome) ?? ALL_BIOMES[0],
     [activeBiome],
   );
   const visibleLevelPills = useMemo(
@@ -75,11 +112,22 @@ export function LeaderboardTabs({
     [activeBiomeMeta],
   );
 
+  // Switching world hops to its first act + first level.
+  const handleWorldChange = (next: WorldId) => {
+    const w = WORLDS.find((x) => x.id === next);
+    if (!w) return;
+    setActiveWorld(next);
+    const firstBiome = w.biomes[0];
+    setActiveBiome(firstBiome.id);
+    const firstLevel = LEVEL_PILLS.find((p) => p.index === firstBiome.from);
+    if (firstLevel) setActiveLevel(firstLevel.id);
+  };
+
   // Keep activeLevel inside the active biome's range. If the user
   // switches biome while pointing at an out-of-range level, snap to
   // the first level of the new biome.
   const handleBiomeChange = (next: BiomeId) => {
-    const meta = BIOMES.find((b) => b.id === next);
+    const meta = ALL_BIOMES.find((b) => b.id === next);
     if (!meta) return;
     setActiveBiome(next);
     const currentIndex = LEVEL_PILLS.find((p) => p.id === activeLevel)?.index;
@@ -138,12 +186,33 @@ export function LeaderboardTabs({
 
       {configured && active === 'global' && (
         <GlassCard padding="md" className="!rounded-3xl">
-          {/* Biome row — three segments mirror the iOS Saga Map's
-              ACT structure: Seed Grove (L1–10), Moonvine Stream
-              (L11–20), Oracle Bloom (L21–30). Switching biome snaps
+          {/* World row — top tier of the Saga Atlas: Logic Garden / Astral
+              Nexus. Mirrors the in-app World selector; switching world hops to
+              its first act + level. The active world carries its own accent. */}
+          {WORLDS.length > 1 && (
+            <div className="mb-3 flex flex-wrap gap-2">
+              {WORLDS.map((w) => (
+                <button
+                  key={w.id}
+                  type="button"
+                  onClick={() => handleWorldChange(w.id)}
+                  className={cn(
+                    'rounded-full px-4 py-2 text-xs font-bold uppercase tracking-[0.14em] transition-all duration-[var(--motion-fast)]',
+                    activeWorld === w.id
+                      ? worldActiveClass(w.accent)
+                      : 'text-[var(--color-text-muted)] ring-1 ring-[var(--color-glass-border)] hover:text-[var(--color-text)]',
+                  )}
+                  aria-pressed={activeWorld === w.id}
+                >
+                  {w.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {/* Biome row — the active world's three acts. Switching biome snaps
               the level pills below to that biome's range. */}
           <div className="mb-3 flex flex-wrap gap-2">
-            {BIOMES.map((b) => (
+            {activeWorldMeta.biomes.map((b) => (
               <button
                 key={b.id}
                 type="button"
@@ -183,8 +252,8 @@ export function LeaderboardTabs({
             ))}
           </div>
           <p className="section-eyebrow mb-4">
-            Global · {activeBiomeMeta.label} · Level{' '}
-            {activeLevel.replace('world1-level-', '')}
+            {activeWorldMeta.label} · {activeBiomeMeta.label} · Level{' '}
+            {activeLevel.replace(/^world[12]-level-/, '')}
           </p>
           {renderRows(globalsByLevel[activeLevel] ?? [], { showStars: true })}
         </GlassCard>

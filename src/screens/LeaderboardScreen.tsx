@@ -24,8 +24,8 @@ import {
   type LeaderboardRowData,
 } from '@/components/leaderboards/LeaderboardRow';
 import { useAuthStore } from '@/game/state/useAuthStore';
-import { WORLD_1_LEVELS } from '@/game/content/levels';
-import { WORLD_1_ACTS } from '@/components/map/mapLayout';
+import { ALL_LEVELS } from '@/game/content/levels';
+import { getActBuckets } from '@/components/map/worldRegistry';
 import { leaderboardService } from '@/services/supabase';
 import {
   colors,
@@ -49,31 +49,33 @@ const TIME_TRIAL_MODES = [
 ];
 
 /**
- * All 30 campaign levels rendered in **numeric** order. We deliberately
- * don't filter by `completedLevelIds` (the old behaviour) because:
- *   1. The progress store returns ids as strings, which sort
- *      lexicographically: L1, L10, L11, L2, … — visible bug.
- *   2. Players want to see top scores on levels they haven't finished
- *      yet (matches the website's /leaderboards experience).
- *
- * Sourcing from `WORLD_1_LEVELS` (which is built `Array.from({ length: 30 })`)
- * guarantees ascending numeric order with no sort step.
+ * All campaign levels (1–60 across both worlds when Astral Nexus is enabled)
+ * rendered in **numeric** order. We deliberately don't filter by
+ * `completedLevelIds` because (1) string ids sort lexicographically (L1, L10,
+ * L11, L2…) and (2) players want to see top scores on levels they haven't
+ * finished. `ALL_LEVELS` is built `Array.from`-ascending, so it's already in
+ * numeric order with global indices 1–60.
  */
-const CAMPAIGN_LEVELS: CampaignLevelOption[] = WORLD_1_LEVELS.map((l) => ({
+const CAMPAIGN_LEVELS: CampaignLevelOption[] = ALL_LEVELS.map((l) => ({
   id: l.id,
   label: `L${l.index}`,
   index: l.index,
 }));
 
 /**
- * Biome groupings for the level picker. Mirrors the in-game ACTs from
- * `mapLayout.WORLD_1_ACTS`. Each biome owns 10 contiguous levels.
+ * Act groupings (the "biome" tier) for the level picker, across every ENABLED
+ * world (3 for Logic Garden; 6 once Astral Nexus is on). Sourced from
+ * `getActBuckets()` so it stays in sync with the saga map + feature flags, and
+ * each act carries its world so the filter bar can show a World selector tier.
+ * `fromGlobal`/`toGlobal` are the global 1–60 level range the act owns.
  */
-const CAMPAIGN_BIOMES: CampaignBiomeOption[] = WORLD_1_ACTS.map((act) => ({
-  id: act.id,
-  label: act.title,
-  fromLevel: act.fromLevel,
-  toLevel: act.toLevel,
+const CAMPAIGN_BIOMES: CampaignBiomeOption[] = getActBuckets().map((b) => ({
+  id: b.act.id,
+  label: b.act.title,
+  fromLevel: b.fromGlobal,
+  toLevel: b.toGlobal,
+  worldNumber: b.worldNumber,
+  worldName: b.worldName,
 }));
 
 export default function LeaderboardScreen() {

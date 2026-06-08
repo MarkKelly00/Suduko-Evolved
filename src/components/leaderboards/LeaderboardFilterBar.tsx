@@ -16,12 +16,13 @@ interface ChipProps {
   label: string;
   active: boolean;
   onPress: () => void;
-  /** `biome` chips are visually heavier than level chips so the hierarchy
-   *  reads (biome > level) — mirrors the website's leaderboard. */
-  size?: 'level' | 'biome';
+  /** Tiered weight so the hierarchy reads (world > biome > level) — mirrors
+   *  the website's leaderboard. */
+  size?: 'level' | 'biome' | 'world';
 }
 
 function Chip({ label, active, onPress, size = 'level' }: ChipProps) {
+  const heavy = size === 'biome' || size === 'world';
   return (
     <Pressable
       onPress={() => {
@@ -33,16 +34,19 @@ function Chip({ label, active, onPress, size = 'level' }: ChipProps) {
       accessibilityState={{ selected: active }}
       style={[
         styles.chip,
-        size === 'biome' && styles.chipBiome,
+        heavy && styles.chipBiome,
+        size === 'world' && styles.chipWorld,
         active && styles.chipActive,
-        active && size === 'biome' && styles.chipBiomeActive,
+        active && heavy && styles.chipBiomeActive,
+        active && size === 'world' && styles.chipWorldActive,
       ]}
       hitSlop={8}
     >
       <Text
         style={[
           styles.chipLabel,
-          size === 'biome' && styles.chipLabelBiome,
+          heavy && styles.chipLabelBiome,
+          size === 'world' && styles.chipLabelWorld,
           active && styles.chipLabelActive,
         ]}
       >
@@ -71,9 +75,13 @@ export interface CampaignLevelOption {
 export interface CampaignBiomeOption {
   id: string;
   label: string;
-  /** Inclusive 1..30 level range owned by this biome. */
+  /** Inclusive global (1..60) level range owned by this biome/act. */
   fromLevel: number;
   toLevel: number;
+  /** World this act belongs to (1 = Logic Garden, 2 = Astral Nexus) — drives
+   *  the top-level World selector tier. */
+  worldNumber: number;
+  worldName: string;
 }
 
 interface Props {
@@ -125,6 +133,24 @@ export function LeaderboardFilterBar({
     );
   }, [campaignBiomes, campaignLevels, state.levelId]);
 
+  // Distinct worlds (Logic Garden / Astral Nexus) in source order — drives the
+  // top-level World selector. Only rendered when more than one world exists.
+  const worlds = useMemo(() => {
+    const seen = new Map<number, string>();
+    for (const b of campaignBiomes) {
+      if (!seen.has(b.worldNumber)) seen.set(b.worldNumber, b.worldName);
+    }
+    return Array.from(seen, ([worldNumber, worldName]) => ({ worldNumber, worldName }));
+  }, [campaignBiomes]);
+
+  const activeWorld = activeBiome?.worldNumber ?? worlds[0]?.worldNumber;
+
+  // Acts visible in the biome row — filtered to the active world.
+  const visibleBiomes = useMemo(
+    () => campaignBiomes.filter((b) => b.worldNumber === activeWorld),
+    [campaignBiomes, activeWorld],
+  );
+
   // Levels visible in the pill row — filtered to the active biome.
   const visibleLevels = useMemo(() => {
     if (!activeBiome) return campaignLevels;
@@ -132,6 +158,14 @@ export function LeaderboardFilterBar({
       (l) => l.index >= activeBiome.fromLevel && l.index <= activeBiome.toLevel,
     );
   }, [campaignLevels, activeBiome]);
+
+  const handleWorldSelect = (worldNumber: number) => {
+    // Hop to the first act of the chosen world, then its first level.
+    const firstBiome = campaignBiomes.find((b) => b.worldNumber === worldNumber);
+    if (!firstBiome) return;
+    const firstLevel = campaignLevels.find((l) => l.index === firstBiome.fromLevel);
+    if (firstLevel) onChange({ ...state, levelId: firstLevel.id });
+  };
 
   const handleBiomeSelect = (biome: CampaignBiomeOption) => {
     // Snap to the first level inside this biome (or keep current if it's
@@ -156,7 +190,26 @@ export function LeaderboardFilterBar({
     }
     return (
       <View style={styles.campaignStack}>
-        {campaignBiomes.length > 1 ? (
+        {worlds.length > 1 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.row}
+            accessibilityRole="tablist"
+            accessibilityLabel="Choose world"
+          >
+            {worlds.map((w) => (
+              <Chip
+                key={w.worldNumber}
+                label={w.worldName}
+                active={activeWorld === w.worldNumber}
+                onPress={() => handleWorldSelect(w.worldNumber)}
+                size="world"
+              />
+            ))}
+          </ScrollView>
+        ) : null}
+        {visibleBiomes.length > 1 ? (
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -164,7 +217,7 @@ export function LeaderboardFilterBar({
             accessibilityRole="tablist"
             accessibilityLabel="Choose biome"
           >
-            {campaignBiomes.map((biome) => (
+            {visibleBiomes.map((biome) => (
               <Chip
                 key={biome.id}
                 label={biome.label}
@@ -268,6 +321,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.base + 2,
     paddingVertical: 9,
   },
+  chipWorld: {
+    paddingHorizontal: spacing.base + 4,
+    paddingVertical: 10,
+    borderColor: 'rgba(224, 185, 106, 0.22)',
+  },
   chipActive: {
     backgroundColor: colors.surfaceElevated,
     borderColor: colors.accentGold,
@@ -282,6 +340,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.5,
     shadowRadius: 10,
   },
+  chipWorldActive: {
+    // Strongest treatment — the World tier sits at the top of the hierarchy.
+    backgroundColor: 'rgba(224, 185, 106, 0.16)',
+    shadowOpacity: 0.6,
+    shadowRadius: 12,
+  },
   chipLabel: {
     color: colors.textMuted,
     fontSize: fontSize.sm,
@@ -292,6 +356,10 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     letterSpacing: letterSpacing.wider,
     textTransform: 'uppercase',
+  },
+  chipLabelWorld: {
+    color: colors.accentGold,
+    fontWeight: fontWeight.bold,
   },
   chipLabelActive: {
     color: colors.text,

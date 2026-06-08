@@ -109,11 +109,18 @@ export async function getGlobalLeaderboard(
  * downstream Record types resolve to plain `Record<string, ...>` —
  * cleaner ergonomics for callers that iterate `Object.entries`.
  */
-const LOGIC_GARDEN_LEVEL_COUNT = 30;
-export const CAMPAIGN_LEVEL_IDS: readonly string[] = Array.from(
-  { length: LOGIC_GARDEN_LEVEL_COUNT },
-  (_, i) => `world1-level-${i + 1}`,
-);
+const LOGIC_GARDEN_LEVEL_COUNT = 30; // World 1: world1-level-1..30
+const ASTRAL_NEXUS_LEVEL_COUNT = 30; // World 2: world2-level-31..60
+export const CAMPAIGN_LEVEL_IDS: readonly string[] = [
+  ...Array.from(
+    { length: LOGIC_GARDEN_LEVEL_COUNT },
+    (_, i) => `world1-level-${i + 1}`,
+  ),
+  ...Array.from(
+    { length: ASTRAL_NEXUS_LEVEL_COUNT },
+    (_, i) => `world2-level-${i + 1 + LOGIC_GARDEN_LEVEL_COUNT}`,
+  ),
+];
 export type CampaignLevelId = string;
 
 /**
