@@ -16,13 +16,13 @@ interface ChipProps {
   label: string;
   active: boolean;
   onPress: () => void;
-  /** Act chips read a touch heavier than level chips. (The World tier is now
-   *  a SegmentedControl, not a chip.) */
-  size?: 'level' | 'biome';
+  /** Tiered weight so the hierarchy reads (world > biome > level) — mirrors
+   *  the website's leaderboard. */
+  size?: 'level' | 'biome' | 'world';
 }
 
 function Chip({ label, active, onPress, size = 'level' }: ChipProps) {
-  const heavy = size === 'biome';
+  const heavy = size === 'biome' || size === 'world';
   return (
     <Pressable
       onPress={() => {
@@ -35,8 +35,10 @@ function Chip({ label, active, onPress, size = 'level' }: ChipProps) {
       style={[
         styles.chip,
         heavy && styles.chipBiome,
+        size === 'world' && styles.chipWorld,
         active && styles.chipActive,
         active && heavy && styles.chipBiomeActive,
+        active && size === 'world' && styles.chipWorldActive,
       ]}
       hitSlop={8}
     >
@@ -44,6 +46,7 @@ function Chip({ label, active, onPress, size = 'level' }: ChipProps) {
         style={[
           styles.chipLabel,
           heavy && styles.chipLabelBiome,
+          size === 'world' && styles.chipLabelWorld,
           active && styles.chipLabelActive,
         ]}
       >
@@ -142,19 +145,6 @@ export function LeaderboardFilterBar({
 
   const activeWorld = activeBiome?.worldNumber ?? worlds[0]?.worldNumber;
 
-  // World toggle items. The visible label is the world's first word so two
-  // segmented controls fit side-by-side on one row (e.g. "Logic" / "Astral");
-  // the full world name is announced to screen readers.
-  const worldItems = useMemo(
-    () =>
-      worlds.map((w) => ({
-        key: String(w.worldNumber),
-        label: w.worldName.split(' ')[0] ?? w.worldName,
-        accessibilityLabel: w.worldName,
-      })),
-    [worlds],
-  );
-
   // Acts visible in the biome row — filtered to the active world.
   const visibleBiomes = useMemo(
     () => campaignBiomes.filter((b) => b.worldNumber === activeWorld),
@@ -200,6 +190,25 @@ export function LeaderboardFilterBar({
     }
     return (
       <View style={styles.campaignStack}>
+        {worlds.length > 1 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.row}
+            accessibilityRole="tablist"
+            accessibilityLabel="Choose world"
+          >
+            {worlds.map((w) => (
+              <Chip
+                key={w.worldNumber}
+                label={w.worldName}
+                active={activeWorld === w.worldNumber}
+                onPress={() => handleWorldSelect(w.worldNumber)}
+                size="world"
+              />
+            ))}
+          </ScrollView>
+        ) : null}
         {visibleBiomes.length > 1 ? (
           <ScrollView
             horizontal
@@ -260,44 +269,25 @@ export function LeaderboardFilterBar({
 
   return (
     <View style={styles.container}>
-      <View style={styles.modeRow}>
-        <View style={styles.modeControl}>
-          <SegmentedControl
-            flush
-            items={modeItems}
-            activeKey={state.mode}
-            onChange={(key) => {
-              if (key === 'campaign-level') {
-                onChange({
-                  ...state,
-                  mode: 'campaign-level',
-                  levelId: state.levelId ?? campaignLevels[0]?.id,
-                });
-              } else {
-                onChange({
-                  ...state,
-                  mode: 'time-trial',
-                  timeTrialMode: state.timeTrialMode ?? timeTrialModes[0]?.id,
-                });
-              }
-            }}
-          />
-        </View>
-        {/* World tier folded into a compact toggle so it's no longer a third
-            chip strip — gold for Logic Garden, violet for Astral Nexus. Shown
-            only in Campaign mode and only when more than one world is open. */}
-        {state.mode === 'campaign-level' && worlds.length > 1 ? (
-          <View style={styles.modeControl}>
-            <SegmentedControl
-              flush
-              items={worldItems}
-              activeKey={String(activeWorld)}
-              accent={activeWorld === 2 ? 'violet' : 'gold'}
-              onChange={(key) => handleWorldSelect(Number(key))}
-            />
-          </View>
-        ) : null}
-      </View>
+      <SegmentedControl
+        items={modeItems}
+        activeKey={state.mode}
+        onChange={(key) => {
+          if (key === 'campaign-level') {
+            onChange({
+              ...state,
+              mode: 'campaign-level',
+              levelId: state.levelId ?? campaignLevels[0]?.id,
+            });
+          } else {
+            onChange({
+              ...state,
+              mode: 'time-trial',
+              timeTrialMode: state.timeTrialMode ?? timeTrialModes[0]?.id,
+            });
+          }
+        }}
+      />
       {state.mode === 'campaign-level' ? renderCampaign() : renderTimeTrial()}
     </View>
   );
@@ -309,18 +299,6 @@ const styles = StyleSheet.create({
     paddingTop: spacing.base,
     paddingBottom: spacing.sm,
     gap: spacing.sm,
-  },
-  // Mode + World controls share one row so World is no longer its own chip
-  // strip. Each control flexes to half the width; the row owns the gutter so
-  // the embedded (flush) controls align with the rows below.
-  modeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-  },
-  modeControl: {
-    flex: 1,
   },
   campaignStack: {
     gap: spacing.sm,
@@ -343,21 +321,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.base + 2,
     paddingVertical: 9,
   },
+  chipWorld: {
+    paddingHorizontal: spacing.base + 4,
+    paddingVertical: 10,
+    borderColor: 'rgba(224, 185, 106, 0.22)',
+  },
   chipActive: {
     backgroundColor: colors.surfaceElevated,
     borderColor: colors.accentGold,
-    // Soft, restrained glow — the gold ring + tint already convey the
-    // selected state. A heavy bloom is what read as "gamey".
     shadowColor: colors.accentGoldGlow,
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
     shadowOffset: { width: 0, height: 0 },
   },
   chipBiomeActive: {
-    // Keep the act chip's glow in line with the level chip — one uniform,
-    // understated selection treatment across both rows.
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
+    // Stronger glow for biome chips so the hierarchy still reads
+    // when both rows are visible at once.
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+  },
+  chipWorldActive: {
+    // Strongest treatment — the World tier sits at the top of the hierarchy.
+    backgroundColor: 'rgba(224, 185, 106, 0.16)',
+    shadowOpacity: 0.6,
+    shadowRadius: 12,
   },
   chipLabel: {
     color: colors.textMuted,
@@ -369,6 +356,10 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     letterSpacing: letterSpacing.wider,
     textTransform: 'uppercase',
+  },
+  chipLabelWorld: {
+    color: colors.accentGold,
+    fontWeight: fontWeight.bold,
   },
   chipLabelActive: {
     color: colors.text,

@@ -53,12 +53,22 @@ export function Avatar({ size = 'md', url, fallbackName, progress }: Props) {
 
   const shimmerStyle = useAnimatedStyle(() => ({ opacity: shimmer.value }));
 
+  // CLIP layer only — rounds + clips the image/fallback. Deliberately has NO
+  // border: combining borderRadius + overflow:'hidden' + borderWidth on one
+  // view triggers an iOS bug that squares off the top/left edge (the "cut off
+  // circle"). The gold ring is drawn as a separate overlay below instead.
   const ringStyle: ViewStyle = {
     width: px,
     height: px,
     borderRadius: px / 2,
     overflow: 'hidden',
     backgroundColor: colors.surface,
+  };
+
+  // Ring border as a non-clipping overlay (no overflow:'hidden'), so it can
+  // round cleanly without the clip bug above.
+  const borderStyle: ViewStyle = {
+    borderRadius: px / 2,
     borderWidth: size === 'lg' || size === 'xl' ? 2 : 1,
     borderColor:
       size === 'lg' || size === 'xl'
@@ -114,6 +124,7 @@ export function Avatar({ size = 'md', url, fallbackName, progress }: Props) {
           </View>
         )}
       </View>
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, borderStyle]} />
       {progress != null && progress >= 0 && progress < 1 ? (
         <ProgressArc size={px} progress={progress} />
       ) : null}
