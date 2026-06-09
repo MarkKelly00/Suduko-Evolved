@@ -6,6 +6,7 @@ import { PremiumButton } from '@/components/ui/PremiumButton';
 import { CurrencyPill } from '@/components/ui/CurrencyPill';
 import { TutorialModal } from '@/components/onboarding/TutorialModal';
 import { useProgressStore } from '@/game/state/useProgressStore';
+import { effectiveStreak } from '@/game/util/streakDate';
 import { campaign } from '@/game/modes/campaign';
 import { levelId, getLevelById } from '@/game/content/levels';
 import {
@@ -22,8 +23,12 @@ function HomeScreen() {
   const navigation = useNavigation<RootStackNavigation>();
   const totalXP = useProgressStore((s) => s.totalXP);
   const currentStreak = useProgressStore((s) => s.currentStreak);
+  const lastStreakDate = useProgressStore((s) => s.lastStreakDate);
   const lastPlayedLevel = useProgressStore((s) => s.lastPlayedLevel);
   const hasSeenTutorial = useProgressStore((s) => s.hasSeenTutorial);
+  // Honest "as of now" streak — 0 if the player has lapsed (last play not
+  // today/yesterday) without needing a background job.
+  const streak = effectiveStreak(currentStreak, lastStreakDate);
 
   const continueLevelId =
     (lastPlayedLevel && getLevelById(lastPlayedLevel)?.id) ?? levelId(1);
@@ -61,7 +66,7 @@ function HomeScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.headerRow}>
           <CurrencyPill label="XP" value={totalXP} icon="✦" />
-          <CurrencyPill label="streak" value={currentStreak} icon="✺" />
+          <CurrencyPill label="streak" value={streak} icon="✺" />
         </View>
 
         <View style={styles.heroBlock}>

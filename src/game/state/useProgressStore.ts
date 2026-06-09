@@ -10,6 +10,7 @@ import {
 import { getStorage } from '@/services/persistence/storage';
 import { nextLevelId } from '@/game/content/levels';
 import { repairUnlockedWorlds } from '@/game/content/worldUnlockRules';
+import { advanceStreak } from '@/game/util/streakDate';
 
 interface RecordResultInput {
   levelId: string;
@@ -21,13 +22,12 @@ interface RecordResultInput {
   time: number;
   /** XP earned this run. */
   xp: number;
-  /** Whether this run should extend the streak counter. Misnamed for
-   *  history — `cleanRun` once required 0 mistakes + 0 hints, but
-   *  that turned out to be too strict (a single mistake erased a long
-   *  streak). Today the call site in GameScreen passes `true` on every
-   *  successful completion, so the streak counts "consecutive levels
-   *  cleared". Crown qualification (the actually-perfect run) still
-   *  goes through `calculateStars()` in scoring.ts. */
+  /** Legacy flag — once gated the streak counter. The streak is now a
+   *  calendar-day streak (see `advanceStreak` in game/util/streakDate), so
+   *  this no longer affects it and is currently unused by `recordResult`.
+   *  Kept on the input shape to avoid churning every call site. Crown
+   *  qualification (the actually-perfect run) goes through `calculateStars()`
+   *  in scoring.ts. */
   cleanRun: boolean;
   /** The next level id to unlock when this one is completed. */
   nextLevelId?: string;
@@ -57,10 +57,12 @@ export interface CloudProgressSnapshot {
   levels: Record<string, ProgressLevelEntry>;
   timeTrialBests: Record<string, TimeTrialBest>;
   totalXP: number;
-  /** Cloud-stored streak. As of build 12 this is always 0 (no code path
-   *  uploads it), but the field is wired up so that whenever a streak-
-   *  upload path is added, the restore picks it up automatically. */
+  /** Cloud-stored streak + the local date it was last advanced on. The
+   *  restore uses the date to decide whether the cloud streak is fresher than
+   *  the local one (rather than a naive max), so a stale streak from another
+   *  device can't resurrect a streak the player already let lapse. */
   currentStreak: number;
+  lastStreakDate: string | null;
 }
 
 export type ProgressState = ProgressStoreV2 & ProgressActions & {
@@ -81,6 +83,7 @@ function persist(state: ProgressStoreV2): void {
     levels: state.levels,
     totalXP: state.totalXP,
     currentStreak: state.currentStreak,
+    lastStreakDate: state.lastStreakDate,
     lastPlayedLevel: state.lastPlayedLevel,
     unlockedLevels: state.unlockedLevels,
     unlockedWorlds: state.unlockedWorlds,
@@ -130,11 +133,19 @@ export const useProgressStore = create<ProgressState>((set, get) => ({
     // completed levels — so finishing world1-level-30 opens Astral Nexus. Never
     // removes a world; only ever adds.
     const unlockedWorlds = repairUnlockedWorlds(state.unlockedWorlds, completedLevelIds);
+    // Calendar-day streak: a solve advances the streak once per local day
+    // (+1 on a consecutive day, reset to 1 after a missed day). `cleanRun` no
+    // longer gates it — simply playing keeps the day's streak alive.
+    const { streak: nextStreak, date: nextStreakDate } = advanceStreak(
+      state.currentStreak,
+      state.lastStreakDate,
+    );
     const next: ProgressStoreV2 = {
       version: 2,
       levels,
       totalXP: state.totalXP + Math.max(0, input.xp),
-      currentStreak: input.cleanRun ? state.currentStreak + 1 : 0,
+      currentStreak: nextStreak,
+      lastStreakDate: nextStreakDate,
       lastPlayedLevel: input.levelId,
       unlockedLevels,
       unlockedWorlds,
@@ -212,15 +223,21 @@ export const useProgressStore = create<ProgressState>((set, get) => ({
     // 4. XP — take max(local, cloud) so guest XP can never regress.
     const totalXP = Math.max(state.totalXP, Math.max(0, snapshot.totalXP));
 
-    // 5. Streak — take max(local, cloud). As of today nothing uploads
-    // the streak to cloud, so cloud value is 0 → effectively this
-    // preserves whatever local has. When streak upload lands later,
-    // the max-merge means returning users get their cloud-stored
-    // streak back automatically.
-    const currentStreak = Math.max(
-      state.currentStreak,
-      Math.max(0, snapshot.currentStreak),
-    );
+    // 5. Streak — date-aware merge. 'YYYY-MM-DD' strings compare
+    // lexicographically == chronologically, so adopt whichever side advanced
+    // its streak more recently; on the same day take the higher streak. This
+    // beats a naive max(local, cloud), which would resurrect a streak the
+    // player already let lapse on another device.
+    let currentStreak = Math.max(0, state.currentStreak);
+    let lastStreakDate = state.lastStreakDate;
+    const cloudStreak = Math.max(0, snapshot.currentStreak);
+    const cloudDate = snapshot.lastStreakDate;
+    if (cloudDate && (!lastStreakDate || cloudDate > lastStreakDate)) {
+      currentStreak = cloudStreak;
+      lastStreakDate = cloudDate;
+    } else if (cloudDate && lastStreakDate && cloudDate === lastStreakDate) {
+      currentStreak = Math.max(currentStreak, cloudStreak);
+    }
 
     const next: ProgressStoreV2 = {
       ...progressSlice(state),
@@ -231,6 +248,7 @@ export const useProgressStore = create<ProgressState>((set, get) => ({
       unlockedWorlds,
       totalXP,
       currentStreak,
+      lastStreakDate,
     };
     set(next);
     persist(next);
@@ -339,6 +357,7 @@ function progressSlice(s: ProgressState): ProgressStoreV2 {
     levels: s.levels,
     totalXP: s.totalXP,
     currentStreak: s.currentStreak,
+    lastStreakDate: s.lastStreakDate,
     lastPlayedLevel: s.lastPlayedLevel,
     unlockedLevels: s.unlockedLevels,
     unlockedWorlds: s.unlockedWorlds,

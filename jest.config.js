@@ -10,6 +10,7 @@ module.exports = {
     '<rootDir>/src/game/content/**/*.test.ts',
     '<rootDir>/src/game/modes/**/*.test.ts',
     '<rootDir>/src/game/sync/**/*.test.ts',
+    '<rootDir>/src/game/util/**/*.test.ts',
     '<rootDir>/src/game/achievements/__tests__/**/*.test.ts',
     '<rootDir>/src/services/persistence/**/*.test.ts',
     '<rootDir>/src/services/supabase/__tests__/username.test.ts',

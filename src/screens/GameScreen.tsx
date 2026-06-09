@@ -15,6 +15,7 @@ import { calculateScore, calculateStars, calculateXP, formatDifficulty } from '@
 import { leaderboardService } from '@/services/social/leaderboardService';
 import { scoreSubmissionService } from '@/services/supabase';
 import { enqueueLevelScore } from '@/game/sync/pendingSubmissionsQueue';
+import { uploadProfileStreak } from '@/game/sync/localToCloudSync';
 import { gameCenterService } from '@/services/social/gameCenterService';
 import { campaign } from '@/game/modes/campaign';
 import { getLevelById, nextLevelId } from '@/game/content/levels';
@@ -101,14 +102,10 @@ function GameScreen() {
       score: breakdown.total,
       time: elapsedSec,
       xp,
-      // Bump streak on every successful level completion. The store
-      // field is named `cleanRun` for historical reasons — it used
-      // to require 0 mistakes AND 0 hints to count, but that was an
-      // overly strict definition (1 mistake erased a 9-level streak).
-      // Streak now represents "consecutive levels cleared", which
-      // matches what players intuitively expect. Crown qualification
-      // (which is a separate game concept) still requires the
-      // perfect criteria via calculateStars in scoring.ts.
+      // `cleanRun` is now a no-op for the streak — the store advances a
+      // calendar-day streak (once per local day played) regardless of this
+      // flag. Left as `true` to avoid churning the input shape. Crown
+      // qualification stays a separate concept via calculateStars in scoring.ts.
       cleanRun: true,
       nextLevelId: nextId,
     });
@@ -139,6 +136,9 @@ function GameScreen() {
     void scoreSubmissionService.submitLevelScore(cloudPayload).catch(() => {
       enqueueLevelScore(cloudPayload);
     });
+    // Push the freshly-advanced day-streak to the cloud (best-effort,
+    // authed-only) so friends' profiles and other devices stay current.
+    void uploadProfileStreak();
     // Game Center coexistence (best-effort).
     if (gameCenterService.isAuthenticated()) {
       void gameCenterService

@@ -13,6 +13,7 @@ import { ProfileRecentSolvesList } from '@/components/profile/ProfileRecentSolve
 import { useAuthStore } from '@/game/state/useAuthStore';
 import { useAuthGate } from '@/components/auth/AuthGate';
 import { useProgressStore } from '@/game/state/useProgressStore';
+import { effectiveStreak } from '@/game/util/streakDate';
 import { useSettingsStore } from '@/game/state/useSettingsStore';
 import { WORLD_1_LEVELS } from '@/game/content/levels';
 import {
@@ -41,6 +42,7 @@ function ProfileScreen() {
 
   const totalXP = useProgressStore((s) => s.totalXP);
   const currentStreak = useProgressStore((s) => s.currentStreak);
+  const lastStreakDate = useProgressStore((s) => s.lastStreakDate);
   const levels = useProgressStore((s) => s.levels);
   const completedLevelIds = useProgressStore((s) => s.completedLevelIds);
   const timeTrialBests = useProgressStore((s) => s.timeTrialBests);
@@ -50,6 +52,10 @@ function ProfileScreen() {
   const totalLevels = WORLD_1_LEVELS.length;
   const progress = completedLevelIds.length / totalLevels;
   const sprintBest = timeTrialBests['sprint-3min'];
+  // Honest local day-streak. The authenticated header previously read the
+  // Supabase `profile.streak`, which nothing ever wrote (always 0); read the
+  // live local streak so it matches Home and actually counts.
+  const streak = effectiveStreak(currentStreak, lastStreakDate);
 
   const isAuthenticated = status === 'authenticated' && profile != null;
 
@@ -117,7 +123,7 @@ function ProfileScreen() {
               username={profile.username ?? null}
               avatarUrl={profile.avatar_url}
               crownsTotal={profile.crowns_total}
-              streak={profile.streak}
+              streak={streak}
             />
             <Pressable
               onPress={() => navigation.navigate('EditProfile')}
@@ -149,7 +155,7 @@ function ProfileScreen() {
               />
               <View style={styles.pillsColumn}>
                 <CurrencyPill label="XP" value={totalXP} icon="" />
-                <CurrencyPill label="streak" value={currentStreak} icon="" />
+                <CurrencyPill label="streak" value={streak} icon="" />
               </View>
             </View>
 

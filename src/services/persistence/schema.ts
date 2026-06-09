@@ -43,6 +43,12 @@ export interface ProgressStoreV2 {
   levels: Record<string, ProgressLevelEntry>;
   totalXP: number;
   currentStreak: number;
+  /** Local `YYYY-MM-DD` of the day the streak was last advanced. Drives the
+   *  calendar-day streak: +1 on a consecutive day, reset to 1 after a gap.
+   *  Additive field — older saves default to `null` (via `defaultProgress`)
+   *  and pick up their first date on the next solve, so no version bump is
+   *  needed. */
+  lastStreakDate: string | null;
   lastPlayedLevel: string | null;
   unlockedLevels: string[];
   /** Worlds the player has opened. `world1` is always present; `world2`
@@ -69,6 +75,7 @@ export function defaultProgress(): ProgressStoreV2 {
     levels: {},
     totalXP: 0,
     currentStreak: 0,
+    lastStreakDate: null,
     lastPlayedLevel: null,
     unlockedLevels: ['world1-level-1'],
     unlockedWorlds: ['world1'],

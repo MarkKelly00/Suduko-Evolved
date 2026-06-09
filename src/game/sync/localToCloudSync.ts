@@ -21,8 +21,36 @@ import { getStorage } from '@/services/persistence/storage';
 import { lastSyncedKey } from '@/services/persistence/schema';
 import { getSupabase } from '@/services/supabase/supabaseClient';
 import { scoreSubmissionService } from '@/services/supabase';
+import { effectiveStreak } from '@/game/util/streakDate';
 import { serializeLevelEntry, serializeTimeTrialBest } from './scoreSerializer';
 import { drainPendingSubmissions } from './pendingSubmissionsQueue';
+
+/**
+ * Push the player's current effective day-streak (+ the local date it was last
+ * advanced on) to the cloud via `set_profile_streak`, so it persists across
+ * reinstalls and shows on friends' profiles. Fire-and-forget and safe to call
+ * on every solve and on each sign-in sync: a no-op when unauthenticated, when
+ * Supabase is unconfigured, or before the player has any streak date. The RPC
+ * only advances the cloud value when this date is >= the stored one, so a
+ * stale device can't clobber a fresher streak.
+ */
+export async function uploadProfileStreak(userId?: string): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) return;
+  const uid = userId ?? useAuthStore.getState().profile?.id;
+  if (!uid) return;
+  const { currentStreak, lastStreakDate } = useProgressStore.getState();
+  if (!lastStreakDate) return;
+  try {
+    await supabase.rpc('set_profile_streak', {
+      p_user_id: uid,
+      p_streak: effectiveStreak(currentStreak, lastStreakDate),
+      p_last_date: lastStreakDate,
+    });
+  } catch {
+    // Best-effort — re-syncs on the next solve / sign-in.
+  }
+}
 
 export interface SyncResult {
   uploadedLevels: number;
@@ -148,6 +176,10 @@ export async function runLocalToCloudSync(userId: string): Promise<SyncResult> {
     } else {
       result.xpReconciled = 'skipped';
     }
+
+    // 4b. Streak — push the current effective day-streak on every sync (it
+    // changes daily, unlike XP, so it's not gated by `alreadySynced`).
+    await uploadProfileStreak(userId);
 
     // 5. Drain any queued submissions in the same pass.
     await drainPendingSubmissions();

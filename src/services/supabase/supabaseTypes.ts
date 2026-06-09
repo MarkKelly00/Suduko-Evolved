@@ -212,6 +212,7 @@ export type Database = {
           deleted_at: string | null;
           display_name: string | null;
           id: string;
+          last_streak_date: string | null;
           levels_cleared: number;
           privacy_level: string;
           stars_total: number;
@@ -230,6 +231,7 @@ export type Database = {
           deleted_at?: string | null;
           display_name?: string | null;
           id: string;
+          last_streak_date?: string | null;
           levels_cleared?: number;
           privacy_level?: string;
           stars_total?: number;
@@ -248,6 +250,7 @@ export type Database = {
           deleted_at?: string | null;
           display_name?: string | null;
           id?: string;
+          last_streak_date?: string | null;
           levels_cleared?: number;
           privacy_level?: string;
           stars_total?: number;
@@ -609,6 +612,10 @@ export type Database = {
           rank: number;
           total: number;
         }[];
+      };
+      set_profile_streak: {
+        Args: { p_last_date: string; p_streak: number; p_user_id: string };
+        Returns: undefined;
       };
       set_profile_xp_max: {
         Args: { p_candidate: number; p_user_id: string };

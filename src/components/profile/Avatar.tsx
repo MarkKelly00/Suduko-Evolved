@@ -72,7 +72,12 @@ export function Avatar({ size = 'md', url, fallbackName, progress }: Props) {
     <View
       style={[
         styles.wrapper,
-        { width: px, height: px },
+        // Round the glow-bearing wrapper itself so iOS casts the goldGlow
+        // shadow from a CIRCULAR layer. Without this the shadow renders from
+        // the wrapper's square bounds and its straight top/left edge reads as
+        // the avatar circle being "cut off". Only lg/xl carry the glow, which
+        // is exactly where the artifact showed.
+        { width: px, height: px, borderRadius: px / 2 },
         (size === 'lg' || size === 'xl') && (shadows.goldGlow as object),
       ]}
       accessibilityRole="image"

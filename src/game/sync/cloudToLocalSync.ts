@@ -38,10 +38,9 @@ export interface CloudSyncResult {
   ttRestored: number;
   /** Cloud XP value at sync time (after max(local, cloud) merge). */
   xpRestored: number;
-  /** Cloud streak value at sync time (after max(local, cloud) merge).
-   *  Note: as of build 12, no code path uploads streak to the cloud,
-   *  so this will be 0 for every user. The fetch is wired up defensively
-   *  for when a streak-upload path lands later. */
+  /** Cloud streak value at sync time (the effective day-streak uploaded by
+   *  `set_profile_streak`). Merged into local via the date-aware rule in
+   *  `restoreFromCloud`. */
   streakRestored: number;
   errors: string[];
 }
@@ -68,6 +67,7 @@ interface CloudTtRow {
 interface CloudProfile {
   xp: number | null;
   streak: number | null;
+  last_streak_date: string | null;
 }
 
 export async function runCloudToLocalSync(
@@ -110,7 +110,7 @@ export async function runCloudToLocalSync(
   // post-resignin profile showing 0 XP despite cloud having 2819.
   const { data: profile, error: e3 } = await supabase
     .from('profiles')
-    .select('xp, streak')
+    .select('xp, streak, last_streak_date')
     .eq('id', userId)
     .maybeSingle();
   if (e3) result.errors.push(`profile: ${e3.message}`);
@@ -150,15 +150,19 @@ export async function runCloudToLocalSync(
   const cloudProfile = profile as CloudProfile | null;
   const totalXP = Math.max(0, cloudProfile?.xp ?? 0);
   const currentStreak = Math.max(0, cloudProfile?.streak ?? 0);
+  const lastStreakDate = cloudProfile?.last_streak_date ?? null;
   result.xpRestored = totalXP;
   result.streakRestored = currentStreak;
 
-  // 5. Apply merge to local store
+  // 5. Apply merge to local store. The date-aware streak merge in
+  // restoreFromCloud uses `lastStreakDate` to decide whether the cloud streak
+  // is fresher than the local one.
   useProgressStore.getState().restoreFromCloud({
     levels,
     timeTrialBests,
     totalXP,
     currentStreak,
+    lastStreakDate,
   });
 
   return result;
