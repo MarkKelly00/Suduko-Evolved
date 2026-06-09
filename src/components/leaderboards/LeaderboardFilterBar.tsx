@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { GlassCard } from '@/components/ui/GlassCard';
 import {
   colors,
   fontSize,
@@ -16,13 +17,16 @@ interface ChipProps {
   label: string;
   active: boolean;
   onPress: () => void;
-  /** Tiered weight so the hierarchy reads (world > biome > level) — mirrors
-   *  the website's leaderboard. */
+  /** Tiered weight so the hierarchy reads (world > biome > level). */
   size?: 'level' | 'biome' | 'world';
+  /** Accent for the active world chip — gold (Logic Garden) or violet
+   *  (Astral Nexus). Act + level chips are always gold. */
+  accent?: 'gold' | 'violet';
 }
 
-function Chip({ label, active, onPress, size = 'level' }: ChipProps) {
+function Chip({ label, active, onPress, size = 'level', accent = 'gold' }: ChipProps) {
   const heavy = size === 'biome' || size === 'world';
+  const violet = accent === 'violet';
   return (
     <Pressable
       onPress={() => {
@@ -34,20 +38,19 @@ function Chip({ label, active, onPress, size = 'level' }: ChipProps) {
       accessibilityState={{ selected: active }}
       style={[
         styles.chip,
-        heavy && styles.chipBiome,
-        size === 'world' && styles.chipWorld,
-        active && styles.chipActive,
-        active && heavy && styles.chipBiomeActive,
-        active && size === 'world' && styles.chipWorldActive,
+        heavy && styles.chipHeavy,
+        size === 'level' && styles.chipLevelResting,
+        active && (violet ? styles.chipActiveViolet : styles.chipActive),
       ]}
       hitSlop={8}
     >
       <Text
         style={[
           styles.chipLabel,
-          heavy && styles.chipLabelBiome,
+          heavy && styles.chipLabelHeavy,
           size === 'world' && styles.chipLabelWorld,
-          active && styles.chipLabelActive,
+          size === 'level' && styles.chipLabelLevel,
+          active && (violet ? styles.chipLabelActiveViolet : styles.chipLabelActive),
         ]}
       >
         {label}
@@ -67,7 +70,7 @@ export interface LeaderboardFilterState {
 export interface CampaignLevelOption {
   id: string;
   label: string;
-  /** 1..30 numeric index — drives biome grouping + sort order so we
+  /** 1..60 numeric index — drives biome grouping + sort order so we
    *  never inherit lexicographic ordering bugs (L1, L10, L11, L2…). */
   index: number;
 }
@@ -86,28 +89,25 @@ export interface CampaignBiomeOption {
 
 interface Props {
   state: LeaderboardFilterState;
-  /** All 30 campaign levels in numeric order (NOT derived from progress
-   *  store — the bar always renders the full World 1 set, mirroring
-   *  the website). */
+  /** All campaign levels in numeric order (NOT derived from progress store —
+   *  the bar always renders the full set, mirroring the website). */
   campaignLevels: CampaignLevelOption[];
-  /** Biome groupings for the level picker (Seed Grove / Moonvine Stream /
-   *  Oracle Bloom). 10 levels each. */
+  /** Act groupings for the level picker, across enabled worlds. */
   campaignBiomes: CampaignBiomeOption[];
   timeTrialModes: { id: string; label: string }[];
   onChange: (next: LeaderboardFilterState) => void;
 }
 
 /**
- * Three-tier filter (Campaign mode) — mirrors the website's
- * /leaderboards experience:
- *   1. SegmentedControl: Campaign vs Time Trial
- *   2. Biome chips: Seed Grove / Moonvine Stream / Oracle Bloom
- *   3. Level pills: L1..L10 within the active biome (10 at a time)
+ * Campaign filter — mirrors the website's /leaderboards card: world → act →
+ * level all live inside ONE glass panel, with a breadcrumb caption beneath
+ * (e.g. "Logic Garden · Seed Grove · Level 1"). Wrapping the tiers in a single
+ * framed card — instead of three separate floating chip strips — is what makes
+ * it read as one cohesive control rather than "too many lines".
  *
- * The biome is derived from `state.levelId` so deep links + restoration
- * land on the correct biome automatically. Switching biomes snaps the
- * level to the biome's first level so the resolved board is always
- * inside the visible pill row.
+ * The active world/act are derived from `state.levelId` so deep links +
+ * restoration land correctly. Switching world/act snaps the level so the
+ * resolved board is always inside the visible pill row.
  */
 export function LeaderboardFilterBar({
   state,
@@ -121,8 +121,8 @@ export function LeaderboardFilterBar({
     { key: 'time-trial' as const, label: 'Time Trial' },
   ];
 
-  // Derive the active biome from the selected levelId so the row +
-  // pills stay in sync with deep-link / route params.
+  // Derive the active biome from the selected levelId so the rows stay in
+  // sync with deep-link / route params.
   const activeBiome = useMemo(() => {
     const lvl = campaignLevels.find((l) => l.id === state.levelId);
     if (!lvl) return campaignBiomes[0];
@@ -133,8 +133,8 @@ export function LeaderboardFilterBar({
     );
   }, [campaignBiomes, campaignLevels, state.levelId]);
 
-  // Distinct worlds (Logic Garden / Astral Nexus) in source order — drives the
-  // top-level World selector. Only rendered when more than one world exists.
+  // Distinct worlds (Logic Garden / Astral Nexus) in source order. Only shown
+  // when more than one world exists (single-world builds are unchanged).
   const worlds = useMemo(() => {
     const seen = new Map<number, string>();
     for (const b of campaignBiomes) {
@@ -145,7 +145,7 @@ export function LeaderboardFilterBar({
 
   const activeWorld = activeBiome?.worldNumber ?? worlds[0]?.worldNumber;
 
-  // Acts visible in the biome row — filtered to the active world.
+  // Acts visible in the act row — filtered to the active world.
   const visibleBiomes = useMemo(
     () => campaignBiomes.filter((b) => b.worldNumber === activeWorld),
     [campaignBiomes, activeWorld],
@@ -160,7 +160,6 @@ export function LeaderboardFilterBar({
   }, [campaignLevels, activeBiome]);
 
   const handleWorldSelect = (worldNumber: number) => {
-    // Hop to the first act of the chosen world, then its first level.
     const firstBiome = campaignBiomes.find((b) => b.worldNumber === worldNumber);
     if (!firstBiome) return;
     const firstLevel = campaignLevels.find((l) => l.index === firstBiome.fromLevel);
@@ -168,12 +167,7 @@ export function LeaderboardFilterBar({
   };
 
   const handleBiomeSelect = (biome: CampaignBiomeOption) => {
-    // Snap to the first level inside this biome (or keep current if it's
-    // already in-range — but the useMemo above already guarantees the
-    // active biome matches the level, so this is always a hop).
-    const firstInBiome = campaignLevels.find(
-      (l) => l.index === biome.fromLevel,
-    );
+    const firstInBiome = campaignLevels.find((l) => l.index === biome.fromLevel);
     if (!firstInBiome) return;
     onChange({ ...state, levelId: firstInBiome.id });
   };
@@ -181,90 +175,115 @@ export function LeaderboardFilterBar({
   const renderCampaign = () => {
     if (campaignLevels.length === 0) {
       return (
-        <View style={styles.emptyStrip}>
-          <Text style={styles.emptyStripText}>
-            Clear levels to populate this list.
-          </Text>
+        <View style={styles.cardOuter}>
+          <GlassCard flat style={styles.filterCard}>
+            <Text style={styles.emptyStripText}>
+              Clear levels to populate this list.
+            </Text>
+          </GlassCard>
         </View>
       );
     }
+    const worldName = worlds.find((w) => w.worldNumber === activeWorld)?.worldName;
+    const activeLevelOpt = campaignLevels.find((l) => l.id === state.levelId);
     return (
-      <View style={styles.campaignStack}>
-        {worlds.length > 1 ? (
+      <View style={styles.cardOuter}>
+        <GlassCard flat style={styles.filterCard}>
+          {worlds.length > 1 ? (
+            <View
+              style={styles.tierRow}
+              accessibilityRole="tablist"
+              accessibilityLabel="Choose world"
+            >
+              {worlds.map((w) => (
+                <Chip
+                  key={w.worldNumber}
+                  label={w.worldName}
+                  active={activeWorld === w.worldNumber}
+                  onPress={() => handleWorldSelect(w.worldNumber)}
+                  size="world"
+                  accent={w.worldNumber === 2 ? 'violet' : 'gold'}
+                />
+              ))}
+            </View>
+          ) : null}
+          {visibleBiomes.length > 1 ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.scrollRow}
+              accessibilityRole="tablist"
+              accessibilityLabel="Choose act"
+            >
+              {visibleBiomes.map((biome) => (
+                <Chip
+                  key={biome.id}
+                  label={biome.label}
+                  active={activeBiome?.id === biome.id}
+                  onPress={() => handleBiomeSelect(biome)}
+                  size="biome"
+                />
+              ))}
+            </ScrollView>
+          ) : null}
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.row}
+            contentContainerStyle={styles.scrollRow}
             accessibilityRole="tablist"
-            accessibilityLabel="Choose world"
+            accessibilityLabel="Choose level"
           >
-            {worlds.map((w) => (
+            {visibleLevels.map((lvl) => (
               <Chip
-                key={w.worldNumber}
-                label={w.worldName}
-                active={activeWorld === w.worldNumber}
-                onPress={() => handleWorldSelect(w.worldNumber)}
-                size="world"
+                key={lvl.id}
+                label={lvl.label}
+                active={state.levelId === lvl.id}
+                onPress={() => onChange({ ...state, levelId: lvl.id })}
               />
             ))}
           </ScrollView>
-        ) : null}
-        {visibleBiomes.length > 1 ? (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.row}
-            accessibilityRole="tablist"
-            accessibilityLabel="Choose biome"
-          >
-            {visibleBiomes.map((biome) => (
-              <Chip
-                key={biome.id}
-                label={biome.label}
-                active={activeBiome?.id === biome.id}
-                onPress={() => handleBiomeSelect(biome)}
-                size="biome"
-              />
-            ))}
-          </ScrollView>
-        ) : null}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.row}
-          accessibilityRole="tablist"
-          accessibilityLabel="Choose level"
-        >
-          {visibleLevels.map((lvl) => (
-            <Chip
-              key={lvl.id}
-              label={lvl.label}
-              active={state.levelId === lvl.id}
-              onPress={() => onChange({ ...state, levelId: lvl.id })}
-            />
-          ))}
-        </ScrollView>
+          <Text style={styles.breadcrumb} numberOfLines={1}>
+            {worldName ? (
+              <Text
+                style={
+                  activeWorld === 2 ? styles.crumbWorldViolet : styles.crumbWorldGold
+                }
+              >
+                {worldName}
+              </Text>
+            ) : null}
+            {worldName && activeBiome ? ' · ' : ''}
+            {activeBiome ? activeBiome.label : ''}
+            {activeLevelOpt ? ` · Level ${activeLevelOpt.index}` : ''}
+          </Text>
+        </GlassCard>
       </View>
     );
   };
 
   const renderTimeTrial = () => (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.row}
-      accessibilityRole="tablist"
-      accessibilityLabel="Choose time trial mode"
-    >
-      {timeTrialModes.map((m) => (
-        <Chip
-          key={m.id}
-          label={m.label}
-          active={state.timeTrialMode === m.id}
-          onPress={() => onChange({ ...state, timeTrialMode: m.id })}
-        />
-      ))}
-    </ScrollView>
+    <View style={styles.cardOuter}>
+      <GlassCard flat style={styles.filterCard}>
+        <View
+          style={styles.tierRow}
+          accessibilityRole="tablist"
+          accessibilityLabel="Choose time trial mode"
+        >
+          {timeTrialModes.map((m) => (
+            <Chip
+              key={m.id}
+              label={m.label}
+              active={state.timeTrialMode === m.id}
+              onPress={() => onChange({ ...state, timeTrialMode: m.id })}
+              size="biome"
+            />
+          ))}
+        </View>
+        <Text style={styles.breadcrumb} numberOfLines={1}>
+          Time Trial · All-time
+        </Text>
+      </GlassCard>
+    </View>
   );
 
   return (
@@ -300,51 +319,66 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
     gap: spacing.sm,
   },
-  campaignStack: {
-    gap: spacing.sm,
-  },
-  row: {
+  cardOuter: {
     paddingHorizontal: spacing.lg,
+  },
+  // The single framed panel that holds all tiers — replaces the three
+  // separate floating chip strips so the filter reads as one control.
+  filterCard: {
+    padding: spacing.md,
+    gap: spacing.sm,
+    borderRadius: radius.xl,
+  },
+  // World / act rows wrap (≤3 items) so there's no ambiguous horizontal scroll.
+  tierRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
     gap: spacing.xs,
+  },
+  // Act + level rows scroll horizontally so long act names stay on one tidy
+  // line; a touch of right padding lets the last chip peek as a scroll cue.
+  scrollRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.xs,
+    paddingRight: spacing.sm,
   },
   chip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    // Transparent border at rest so the active state can add a coloured ring
+    // without shifting layout. No resting border keeps the card uncluttered.
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  chipHeavy: {
     paddingHorizontal: spacing.base,
     paddingVertical: 7,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
   },
-  chipBiome: {
-    paddingHorizontal: spacing.base + 2,
-    paddingVertical: 9,
-  },
-  chipWorld: {
-    paddingHorizontal: spacing.base + 4,
-    paddingVertical: 10,
-    borderColor: 'rgba(224, 185, 106, 0.22)',
+  // Level pills carry a faint fill at rest (like the website) so the granular
+  // picker reads as a distinct band without needing borders.
+  chipLevelResting: {
+    backgroundColor: 'rgba(31, 42, 68, 0.6)',
   },
   chipActive: {
-    backgroundColor: colors.surfaceElevated,
-    borderColor: colors.accentGold,
+    backgroundColor: 'rgba(224, 185, 106, 0.16)',
+    borderColor: 'rgba(224, 185, 106, 0.5)',
+    // Soft, restrained glow — the ring + tint already carry the selected
+    // state. A heavy bloom is what read as "gamey".
     shadowColor: colors.accentGoldGlow,
-    shadowOpacity: 0.35,
-    shadowRadius: 6,
+    shadowOpacity: 0.22,
+    shadowRadius: 4,
     shadowOffset: { width: 0, height: 0 },
   },
-  chipBiomeActive: {
-    // Stronger glow for biome chips so the hierarchy still reads
-    // when both rows are visible at once.
-    shadowOpacity: 0.5,
-    shadowRadius: 10,
-  },
-  chipWorldActive: {
-    // Strongest treatment — the World tier sits at the top of the hierarchy.
-    backgroundColor: 'rgba(224, 185, 106, 0.16)',
-    shadowOpacity: 0.6,
-    shadowRadius: 12,
+  chipActiveViolet: {
+    backgroundColor: 'rgba(157, 123, 255, 0.18)',
+    borderColor: 'rgba(157, 123, 255, 0.5)',
+    shadowColor: colors.astralVioletGlow,
+    shadowOpacity: 0.22,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 0 },
   },
   chipLabel: {
     color: colors.textMuted,
@@ -352,21 +386,38 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.semibold,
     letterSpacing: letterSpacing.wide,
   },
-  chipLabelBiome: {
+  chipLabelHeavy: {
     fontSize: fontSize.xs,
     letterSpacing: letterSpacing.wider,
     textTransform: 'uppercase',
   },
   chipLabelWorld: {
-    color: colors.accentGold,
     fontWeight: fontWeight.bold,
   },
-  chipLabelActive: {
-    color: colors.text,
+  chipLabelLevel: {
+    fontWeight: fontWeight.bold,
+    fontVariant: ['tabular-nums'],
   },
-  emptyStrip: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.xs,
+  chipLabelActive: {
+    color: colors.accentGoldGlow,
+  },
+  chipLabelActiveViolet: {
+    color: colors.astralVioletGlow,
+  },
+  breadcrumb: {
+    color: colors.textDim,
+    fontSize: fontSize.xxs,
+    letterSpacing: letterSpacing.wider,
+    textTransform: 'uppercase',
+    marginTop: spacing.xxs,
+  },
+  crumbWorldGold: {
+    color: colors.accentGoldGlow,
+    fontWeight: fontWeight.bold,
+  },
+  crumbWorldViolet: {
+    color: colors.astralVioletGlow,
+    fontWeight: fontWeight.bold,
   },
   emptyStripText: {
     color: colors.textMuted,
